@@ -19,15 +19,19 @@ jobs:
           - runs-on: ubuntu-24.04
             os: linux
             arch: x64
+            target: bun-linux-x64
           - runs-on: ubuntu-24.04-arm
             os: linux
             arch: arm64
-          - runs-on: macos-13
+            target: bun-linux-arm64
+          - runs-on: macos-15
             os: darwin
             arch: x64
-          - runs-on: macos-14
+            target: bun-darwin-x64
+          - runs-on: macos-15
             os: darwin
             arch: arm64
+            target: bun-darwin-arm64
 
     steps:
       - name: Check out repository
@@ -46,6 +50,7 @@ jobs:
           mkdir -p dist/release
           bun build \
             --compile \
+            --target=${{ matrix.target }} \
             --format=esm \
             --minify \
             --sourcemap \
