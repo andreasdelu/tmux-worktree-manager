@@ -1,6 +1,6 @@
 import type { Dispatch, MutableRefObject, SetStateAction } from "react";
 import { useInput } from "ink";
-import type { AppState, SourceEntry, ViewMode } from "./types";
+import type { AppState, PreviewData, SourceEntry, ViewMode } from "./types";
 import { parseSourceEntry, writeSources } from "./lib/sources";
 import { loadItems } from "./lib/discovery";
 import { waitForPaint } from "./lib/commands";
@@ -22,7 +22,7 @@ type UseTwmInputArgs = {
   state: AppState;
   setState: Dispatch<SetStateAction<AppState>>;
   refreshItems: (message?: string, sourceEntries?: SourceEntry[]) => void;
-  previewCacheRef: MutableRefObject<Map<string, string>>;
+  previewCacheRef: MutableRefObject<Map<string, PreviewData>>;
   setPreviewReloadNonce: Dispatch<SetStateAction<number>>;
 };
 
@@ -240,7 +240,7 @@ export const useTwmInput = ({
               selected: nextSelected,
               dialog: { kind: "none" },
               message,
-              preview: "",
+              preview: null,
               previewPath: items[nextSelected]?.path ?? "",
               previewLoading: items[nextSelected]?.kind === "worktree",
             };
@@ -313,7 +313,7 @@ export const useTwmInput = ({
                 selected: nextSelected,
                 dialog: { kind: "none" },
                 message,
-                preview: "",
+                preview: null,
                 previewPath: items[nextSelected]?.path ?? "",
                 previewLoading: items[nextSelected]?.kind === "worktree",
               };
@@ -372,7 +372,7 @@ export const useTwmInput = ({
         setState((currentState) => ({
           ...currentState,
           message: "",
-          preview: "",
+          preview: null,
           previewPath: current.path,
           previewLoading: true,
         }));

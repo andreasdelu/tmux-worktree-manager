@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { render, Box, useApp } from "ink";
 import { ensureConfigDefaults, loadingFrames, previewDebounceMs } from "./config";
-import type { AppState, SourceEntry, ViewMode } from "./types";
+import type { AppState, PreviewData, SourceEntry, ViewMode } from "./types";
 import { loadSources, formatPath } from "./lib/sources";
 import { loadItems } from "./lib/discovery";
 import { startPreviewLoad } from "./lib/preview";
@@ -19,7 +19,7 @@ ensureConfigDefaults();
 
 const App = () => {
   const { exit } = useApp();
-  const previewCacheRef = useRef(new Map<string, string>());
+  const previewCacheRef = useRef(new Map<string, PreviewData>());
   const [view, setView] = useState<ViewMode>("worktrees");
   const [sources, setSources] = useState<SourceEntry[]>(() => loadSources());
   const [selectedSource, setSelectedSource] = useState(0);
@@ -29,7 +29,7 @@ const App = () => {
     selected: 0,
     message: "",
     dialog: { kind: "none" },
-    preview: "",
+    preview: null,
     previewPath: "",
     previewLoading: false,
     loading: true,
@@ -51,7 +51,7 @@ const App = () => {
         selected: nextSelected,
         loading: false,
         message,
-        preview: "",
+        preview: null,
         previewPath: items[nextSelected]?.path ?? "",
         previewLoading: items[nextSelected]?.kind === "worktree",
       };
@@ -100,7 +100,7 @@ const App = () => {
     if (!current) {
       setState((existing) => ({
         ...existing,
-        preview: "",
+        preview: null,
         previewPath: "",
         previewLoading: false,
       }));
@@ -110,7 +110,7 @@ const App = () => {
     if (current.kind === "source-empty") {
       setState((existing) => ({
         ...existing,
-        preview: "",
+        preview: null,
         previewPath: current.path,
         previewLoading: false,
       }));
@@ -138,7 +138,7 @@ const App = () => {
 
         return {
           ...existing,
-          preview: "",
+          preview: null,
           previewPath: current.path,
           previewLoading: true,
         };
@@ -150,7 +150,7 @@ const App = () => {
       void (async () => {
         const preview = await previewLoad.promise;
 
-        if (cancelled) {
+        if (cancelled || !preview) {
           return;
         }
 
@@ -237,32 +237,37 @@ const App = () => {
     ? state.previewPath === current.path && !state.previewLoading
     : false;
   const cachedPreview = current?.kind === "worktree"
-    ? (previewCacheRef.current.get(current.path) ?? "")
-    : "";
-  const effectivePreview = previewMatchesCurrent
-    ? state.preview
-    : cachedPreview;
+    ? (previewCacheRef.current.get(current.path) ?? null)
+    : null;
+  const effectivePreview = previewMatchesCurrent ? state.preview : cachedPreview;
   const showPreviewLoading = current?.kind === "worktree" ? !effectivePreview : false;
-  const previewLines = effectivePreview ? effectivePreview.split("\n") : [];
-  const previewPath = previewLines[1] ?? formatPath(current?.path ?? "");
-  const previewBody = previewLines
-    .slice(2)
-    .filter((line) => line.trim().length > 0);
-  const previewMetaRows = previewBody
-    .map((line) => {
-      const match = line.match(
-        /^\s*(Branch|Base|Track|Status|Tmux|Last)\s+(.*)$/,
-      );
-      return match ? { label: match[1], value: match[2] } : null;
-    })
-    .filter((row): row is { label: string; value: string } => row !== null);
-  const allPreviewChanges = previewBody.filter(
-    (line) => !/^\s*(Branch|Base|Track|Status|Tmux|Last)\s+/.test(line),
-  );
-  const previewChanges = allPreviewChanges.slice(0, 5);
+  const previewPath = effectivePreview?.path
+    ? formatPath(effectivePreview.path)
+    : formatPath(current?.path ?? "");
+  const previewMetaRows = [
+    effectivePreview?.branch
+      ? { label: "Branch", value: effectivePreview.branch }
+      : null,
+    effectivePreview?.base
+      ? { label: "Base", value: effectivePreview.base }
+      : null,
+    effectivePreview?.track
+      ? { label: "Track", value: effectivePreview.track }
+      : null,
+    effectivePreview
+      ? { label: "Status", value: effectivePreview.status }
+      : null,
+    effectivePreview?.tmux
+      ? { label: "Tmux", value: effectivePreview.tmux }
+      : null,
+    effectivePreview?.last
+      ? { label: "Last", value: effectivePreview.last }
+      : null,
+  ].filter((row): row is { label: string; value: string } => row !== null);
+  const previewChanges = effectivePreview?.changes.slice(0, 5) ?? [];
   const hiddenPreviewChanges = Math.max(
     0,
-    allPreviewChanges.length - previewChanges.length,
+    (effectivePreview?.changes.length ?? 0) - previewChanges.length,
   );
 
   return (

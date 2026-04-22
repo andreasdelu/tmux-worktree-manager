@@ -27,12 +27,23 @@ export type SourceEntry = {
   issue: string;
 };
 
+export type PreviewData = {
+  path: string;
+  branch: string;
+  base: string;
+  track: string;
+  status: string;
+  tmux: string;
+  last: string;
+  changes: string[];
+};
+
 export type AppState = {
   items: Item[];
   selected: number;
   message: string;
   dialog: DialogState;
-  preview: string;
+  preview: PreviewData | null;
   previewPath: string;
   previewLoading: boolean;
   loading: boolean;

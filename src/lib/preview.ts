@@ -1,7 +1,6 @@
-import path from "node:path";
-import { formatPath } from "./sources";
-import { runCommand, startTextCommand } from "./commands";
+import { startTextCommand } from "./commands";
 import { sessionNameFor } from "./session";
+import type { PreviewData } from "../types";
 
 const parseBranchInfoLine = (line: string) => {
   if (!line) {
@@ -22,28 +21,6 @@ const parseBranchInfoLine = (line: string) => {
   }
 
   return { branch: head, base: "", divergence };
-};
-
-const repoNameForDir = async (dir: string, processes?: Subprocess[]) => {
-  const command = startTextCommand(
-    ["git", "-C", dir, "rev-parse", "--git-common-dir"],
-    processes,
-  );
-  const { stdout, exitCode } = await command.promise;
-
-  if (exitCode !== 0) {
-    return path.basename(dir);
-  }
-
-  const raw = stdout.trim() || ".git";
-  const commonDir = path.isAbsolute(raw) ? raw : path.resolve(dir, raw);
-  const normalized = path.resolve(commonDir);
-
-  if (path.basename(normalized) === ".git") {
-    return path.basename(path.dirname(normalized));
-  }
-
-  return path.basename(normalized);
 };
 
 const sessionStateForDir = async (dir: string, processes?: Subprocess[]) => {
@@ -77,7 +54,10 @@ const sessionStateForDir = async (dir: string, processes?: Subprocess[]) => {
   return "existing session";
 };
 
-const buildPreviewText = async (dir: string, processes?: Subprocess[]) => {
+const buildPreviewData = async (
+  dir: string,
+  processes?: Subprocess[],
+): Promise<PreviewData> => {
   const statusCommand = startTextCommand(
     ["git", "-C", dir, "status", "--short", "--branch"],
     processes,
@@ -86,13 +66,11 @@ const buildPreviewText = async (dir: string, processes?: Subprocess[]) => {
     ["git", "-C", dir, "log", "-1", "--pretty=format:%h %s"],
     processes,
   );
-  const [repoName, sessionState, statusResult, lastCommitResult] =
-    await Promise.all([
-      repoNameForDir(dir, processes),
-      sessionStateForDir(dir, processes),
-      statusCommand.promise,
-      lastCommitCommand.promise,
-    ]);
+  const [sessionState, statusResult, lastCommitResult] = await Promise.all([
+    sessionStateForDir(dir, processes),
+    statusCommand.promise,
+    lastCommitCommand.promise,
+  ]);
 
   const statusLines = statusResult.exitCode === 0
     ? statusResult.stdout.split("\n").filter((line) => line.length > 0)
@@ -100,42 +78,19 @@ const buildPreviewText = async (dir: string, processes?: Subprocess[]) => {
   const header = statusLines[0]?.startsWith("## ")
     ? statusLines[0].slice(3)
     : "";
-  const changeLines = header ? statusLines.slice(1) : statusLines;
+  const changes = header ? statusLines.slice(1) : statusLines;
   const { branch, base, divergence } = parseBranchInfoLine(header);
-  const worktreeName = path.basename(dir);
-  const lastCommit =
-    lastCommitResult.exitCode === 0 ? lastCommitResult.stdout.trim() : "";
-  const dirtySummary =
-    changeLines.length === 0 ? "clean" : `${changeLines.length} changes`;
-  const lines = [`${repoName}  ${worktreeName}`, formatPath(dir), ""];
 
-  if (branch) {
-    lines.push(`  Branch  ${branch}`);
-  }
-
-  if (base) {
-    lines.push(`  Base    ${base}`);
-  }
-
-  if (divergence) {
-    lines.push(`  Track   ${divergence}`);
-  }
-
-  lines.push(`  Status  ${dirtySummary}`);
-
-  if (sessionState) {
-    lines.push(`  Tmux    ${sessionState}`);
-  }
-
-  if (lastCommit) {
-    lines.push(`  Last    ${lastCommit}`);
-  }
-
-  if (changeLines.length > 0) {
-    lines.push("", ...changeLines);
-  }
-
-  return lines.join("\n").trimEnd();
+  return {
+    path: dir,
+    branch,
+    base,
+    track: divergence,
+    status: changes.length === 0 ? "clean" : `${changes.length} changes`,
+    tmux: sessionState,
+    last: lastCommitResult.exitCode === 0 ? lastCommitResult.stdout.trim() : "",
+    changes,
+  };
 };
 
 export const startPreviewLoad = (itemPath: string) => {
@@ -144,8 +99,8 @@ export const startPreviewLoad = (itemPath: string) => {
 
   return {
     promise: (async () => {
-      const preview = await buildPreviewText(itemPath, processes);
-      return cancelled ? "" : preview;
+      const preview = await buildPreviewData(itemPath, processes);
+      return cancelled ? null : preview;
     })(),
     cancel: () => {
       cancelled = true;
