@@ -1,5 +1,4 @@
 import React from "react";
-import { Box, Text } from "ink";
 import { DialogFrame } from "./DialogFrame";
 
 type NoticeOverlayProps = {
@@ -21,8 +20,6 @@ export const NoticeOverlay = ({
     borderColor="yellow"
     title={title}
     subtitle={message}
-    footer="enter close • esc close"
-  >
-    <Box />
-  </DialogFrame>
+    footer="enter ok • esc close"
+  />
 );

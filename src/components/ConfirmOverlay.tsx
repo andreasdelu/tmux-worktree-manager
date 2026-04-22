@@ -28,7 +28,7 @@ export const ConfirmOverlay = ({
       borderColor="yellow"
       title={title}
       subtitle={subtitle}
-      footer="y confirm • n cancel • esc cancel"
+      footer="y confirm • n cancel • esc close"
     />
   );
 };

@@ -19,7 +19,7 @@ export const AddSourceOverlay = ({
     borderColor="gray"
     title="Add repo root"
     subtitle="Add a repository root so its linked worktrees can appear in the picker."
-    footer="enter save • esc cancel"
+    footer="enter add • esc cancel"
   >
     <AddSourceDialog value={value} />
   </DialogFrame>
