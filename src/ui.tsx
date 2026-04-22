@@ -4,6 +4,7 @@ import type { DialogState, Item, SourceEntry, ViewMode } from "./types";
 import { AddSourceOverlay } from "./components/AddSourceOverlay";
 import { ConfirmOverlay } from "./components/ConfirmOverlay";
 import { CreateWorktreeOverlay } from "./components/CreateWorktreeOverlay";
+import { NoticeOverlay } from "./components/NoticeOverlay";
 import { RunningOverlay } from "./components/RunningOverlay";
 import { SourceDetails } from "./components/SourceDetails";
 import { WorktreeDetails } from "./components/WorktreeDetails";
@@ -309,6 +310,15 @@ export const DialogOverlay = ({
           isSplit={isSplit}
           mode={dialog.mode}
           currentName={current?.name}
+        />
+      );
+    case "notice":
+      return (
+        <NoticeOverlay
+          rootHeight={rootHeight}
+          isSplit={isSplit}
+          title={dialog.title}
+          message={dialog.message}
         />
       );
     case "running":

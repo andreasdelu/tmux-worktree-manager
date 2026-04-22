@@ -16,6 +16,7 @@ export type DialogState =
   | { kind: "add-source"; value: string }
   | { kind: "create"; value: string }
   | { kind: "confirm"; mode: ActionMode }
+  | { kind: "notice"; title: string; message: string }
   | { kind: "running"; label: string };
 
 export type SourceEntry = {

@@ -6,6 +6,7 @@ import {
   createItem,
   openItem,
   performAction,
+  removalBlockedReason,
   suggestedCreateTargetDir,
 } from "./lib/actions";
 import type { TwmController } from "./useTwmController";
@@ -236,6 +237,23 @@ export const useTwmInput = ({ exit, controller }: UseTwmInputArgs) => {
     return true;
   };
 
+  const handleNoticeDialogInput = (input: string, key: any) => {
+    if (state.dialog.kind !== "notice") {
+      return false;
+    }
+
+    if (key.escape || key.return || input === "q" || input === "\r") {
+      setState((current) => ({
+        ...current,
+        dialog: { kind: "none" },
+        message: "",
+      }));
+      return true;
+    }
+
+    return true;
+  };
+
   const handleConfirmDialogInput = (input: string, key: any) => {
     if (state.dialog.kind !== "confirm") {
       return false;
@@ -391,11 +409,27 @@ export const useTwmInput = ({ exit, controller }: UseTwmInputArgs) => {
     }
 
     if (input === "x") {
-      if (state.items[state.selected]?.kind === "worktree") {
-        setState((current) => ({
-          ...current,
-          dialog: { kind: "confirm", mode: "remove" },
-        }));
+      const current = state.items[state.selected];
+      if (current?.kind === "worktree") {
+        void (async () => {
+          const blockedReason = await removalBlockedReason(current.path);
+          setState((currentState) => {
+            if (currentState.items[currentState.selected]?.path !== current.path) {
+              return currentState;
+            }
+
+            return {
+              ...currentState,
+              dialog: blockedReason
+                ? {
+                    kind: "notice",
+                    title: "Can't remove this worktree",
+                    message: blockedReason,
+                  }
+                : { kind: "confirm", mode: "remove" },
+            };
+          });
+        })();
       }
       return true;
     }
@@ -422,6 +456,10 @@ export const useTwmInput = ({ exit, controller }: UseTwmInputArgs) => {
     }
 
     if (handleCreateDialogInput(input, key)) {
+      return;
+    }
+
+    if (handleNoticeDialogInput(input, key)) {
       return;
     }
 

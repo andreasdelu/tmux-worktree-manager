@@ -66,6 +66,30 @@ const suggestedCreateTargetRoot = (dir: string) => {
 export const suggestedCreateTargetDir = (dir: string, branchName: string) =>
   path.join(suggestedCreateTargetRoot(dir), branchName);
 
+export const removalBlockedReason = async (
+  itemPath: string,
+): Promise<string | null> => {
+  const sessionName = sessionNameFor(itemPath);
+
+  if (await isPrimaryWorktreeAsync(itemPath)) {
+    return "This is the primary checkout, so twm won't remove it.";
+  }
+
+  if ((await runCommand(["git", "-C", itemPath, "status", "--porcelain"])).stdout.trim()) {
+    return "This worktree has uncommitted changes. Commit, stash, or discard them first, then try again.";
+  }
+
+  const currentSession = (
+    await runCommand(["tmux", "display-message", "-p", "#S"])
+  ).stdout.trim();
+
+  if (process.env.TMUX && sessionName === currentSession) {
+    return "You're currently inside this worktree's tmux session, so twm won't remove it.";
+  }
+
+  return null;
+};
+
 export const performAction = async (
   mode: ActionMode,
   itemPath: string,
@@ -91,20 +115,9 @@ export const performAction = async (
       : `Failed to close tmux session for ${path.basename(itemPath)}`;
   }
 
-  if (await isPrimaryWorktreeAsync(itemPath)) {
-    return "Won't remove the primary checkout";
-  }
-
-  if ((await runCommand(["git", "-C", itemPath, "status", "--porcelain"])).stdout.trim()) {
-    return "Worktree has changes; not removing";
-  }
-
-  const currentSession = (
-    await runCommand(["tmux", "display-message", "-p", "#S"])
-  ).stdout.trim();
-
-  if (process.env.TMUX && sessionName === currentSession) {
-    return "Won't remove the current session's worktree";
+  const blockedReason = await removalBlockedReason(itemPath);
+  if (blockedReason) {
+    return blockedReason;
   }
 
   if (await hasTmuxSessionAsync(sessionName)) {
