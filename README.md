@@ -31,6 +31,11 @@ By default, `twm` binds:
 
 On first launch it installs the `twm` binary if needed.
 
+After that, launching `twm` also refreshes the installed binary automatically when:
+- the plugin checkout changed
+- `@twm-version` changed
+- `@twm-install-mode` changed
+
 ## First run
 
 Press:
@@ -180,6 +185,8 @@ Defaults to:
 
 - `latest`
 
+If you change this value, the next `prefix + W` refreshes the installed binary.
+
 ### `@twm-install-mode`
 
 Install behavior for the binary:
@@ -209,6 +216,8 @@ Add the top-level repo directory itself, not a nested folder inside it.
 ### The binary install fails
 
 `auto` mode downloads a compressed release binary first. If that fails and Bun is available, it falls back to a local build.
+
+If you just updated the plugin or changed `@twm-version`, `prefix + W` will try to refresh the installed binary automatically.
 
 Release downloads use compressed `.gz` assets.
 

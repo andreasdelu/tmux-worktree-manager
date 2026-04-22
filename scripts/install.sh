@@ -3,11 +3,13 @@ set -euo pipefail
 
 repo_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
 binary="$repo_dir/dist/twm"
+stamp_file="$repo_dir/dist/.install-stamp"
 release_repo="${TWM_RELEASE_REPO:-andreasdelu/tmux-worktree-manager}"
 version="${TWM_VERSION:-latest}"
 install_mode="${TWM_INSTALL_MODE:-auto}"
+force_install="${TWM_FORCE_INSTALL:-0}"
 
-if [ -x "$binary" ]; then
+if [ "$force_install" != "1" ] && [ -x "$binary" ]; then
   exit 0
 fi
 
@@ -75,6 +77,29 @@ download_binary() {
   rm -f "$tmp_gz"
 }
 
+plugin_revision() {
+  if git -C "$repo_dir" rev-parse --verify HEAD >/dev/null 2>&1; then
+    git -C "$repo_dir" rev-parse --verify HEAD
+  else
+    printf 'unknown\n'
+  fi
+}
+
+desired_install_stamp() {
+  printf 'version=%s\nmode=%s\nplugin_rev=%s\n' \
+    "$version" \
+    "$install_mode" \
+    "$(plugin_revision)"
+}
+
+write_install_stamp() {
+  local tmp_stamp
+  mkdir -p "$repo_dir/dist"
+  tmp_stamp="$(mktemp "${TMPDIR:-/tmp}/twm-install-stamp.XXXXXX")"
+  desired_install_stamp > "$tmp_stamp"
+  mv "$tmp_stamp" "$stamp_file"
+}
+
 build_binary() {
   if ! command -v bun >/dev/null 2>&1; then
     printf 'twm: bun is required for local build fallback\n' >&2
@@ -114,3 +139,5 @@ if [ ! -x "$binary" ]; then
   printf 'twm: install finished without a runnable binary\n' >&2
   exit 1
 fi
+
+write_install_stamp
