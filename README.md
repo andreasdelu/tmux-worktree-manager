@@ -1,5 +1,14 @@
 # tmux-worktree-manager
 
+```text
+████████╗██╗    ██╗███╗   ███╗
+╚══██╔══╝██║    ██║████╗ ████║
+   ██║   ██║ █╗ ██║██╔████╔██║
+   ██║   ██║███╗██║██║╚██╔╝██║
+   ██║   ╚███╔███╔╝██║ ╚═╝ ██║
+   ╚═╝    ╚══╝╚══╝ ╚═╝     ╚═╝
+```
+
 `twm` is a tmux popup for jumping between Git worktrees and opening them in ready-to-use tmux sessions.
 
 It is built for the common flow:
