@@ -179,17 +179,34 @@ type HelpLineProps = {
   current?: Item;
 };
 
-export const HelpLine = ({ view, keybindLegendHeight, current }: HelpLineProps) => (
-  <Box paddingX={1} flexDirection="column" minHeight={keybindLegendHeight}>
-    <Text color="gray">
-      {view === "worktrees"
-        ? current?.kind === "source-empty"
-          ? "tab sources • j/k move • c create first worktree • q quit"
-          : "tab sources • j/k move • enter open • r refresh • c create • d close tmux • x remove worktree • q quit"
-        : "tab worktrees • j/k move • a add source • x remove source • q quit"}
-    </Text>
-  </Box>
-);
+export const HelpLine = ({ view, keybindLegendHeight, current }: HelpLineProps) => {
+  const worktreeLegend = current?.kind === "source-empty"
+    ? "tab sources • j/k move • c create first worktree • q quit"
+    : current?.kind === "worktree"
+      ? [
+          "tab sources",
+          "j/k move",
+          "enter open",
+          "r refresh",
+          "c create worktree",
+          current.hasSession ? "d close tmux" : null,
+          "x remove worktree",
+          "q quit",
+        ]
+          .filter((part): part is string => part !== null)
+          .join(" • ")
+      : "tab sources • j/k move • q quit";
+
+  return (
+    <Box paddingX={1} flexDirection="column" minHeight={keybindLegendHeight}>
+      <Text color="cyanBright">
+        {view === "worktrees"
+          ? worktreeLegend
+          : "tab worktrees • j/k move • a add source • x remove source • q quit"}
+      </Text>
+    </Box>
+  );
+};
 
 type DialogOverlayProps = {
   dialog: DialogState;
