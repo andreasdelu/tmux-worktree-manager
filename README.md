@@ -3,6 +3,7 @@
 `twm` is a tmux popup for jumping between Git worktrees and opening them in ready-to-use tmux sessions.
 
 It is built for the common flow:
+
 - keep a few repo roots configured
 - see linked worktrees across those repos
 - hit one key to jump into the right session
@@ -32,6 +33,7 @@ By default, `twm` binds:
 On first launch it installs the `twm` binary if needed.
 
 After that, launching `twm` also refreshes the installed binary automatically when:
+
 - the plugin checkout changed
 - `@twm-version` changed
 - `@twm-install-mode` changed
@@ -54,9 +56,7 @@ On first boot, `twm` also creates:
 Add a repo root such as:
 
 ```txt
-~/Documents/pax
-~/Documents/landfolk
-~/.dotfiles
+~/twm
 ```
 
 Use the actual **git repo root**, not a child directory inside it.
@@ -103,6 +103,7 @@ Keys:
 - `q` or `esc` — quit
 
 Source validation is strict:
+
 - missing paths are rejected
 - duplicates are rejected
 - non-repo roots are rejected
@@ -153,6 +154,7 @@ Available environment variables:
 - `TWM_SESSION_IS_NEW=1`
 
 The built-in default layout already gives you:
+
 - a `code` window
 - a split main layout
 - a `shell` window
@@ -208,6 +210,7 @@ Most people should leave this at:
 ### Nothing opens when I press `prefix + W`
 
 Check that:
+
 - TPM is installed
 - the plugin is listed in `.tmux.conf`
 - plugins were installed with `prefix + I`
