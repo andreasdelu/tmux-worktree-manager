@@ -56,7 +56,7 @@ export const suggestedCreateTargetDir = (dir: string, branchName: string) => {
 };
 
 export const performAction = async (
-  mode: Exclude<ActionMode, "none">,
+  mode: ActionMode,
   itemPath: string,
 ): Promise<string> => {
   const sessionName = sessionNameFor(itemPath);

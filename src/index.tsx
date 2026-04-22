@@ -33,18 +33,12 @@ const App = () => {
   const [view, setView] = useState<ViewMode>("worktrees");
   const [sources, setSources] = useState<SourceEntry[]>(() => loadSources());
   const [selectedSource, setSelectedSource] = useState(0);
-  const [addingSource, setAddingSource] = useState(false);
-  const [sourceInput, setSourceInput] = useState("");
   const [previewReloadNonce, setPreviewReloadNonce] = useState(0);
   const [state, setState] = useState<AppState>({
     items: [],
     selected: 0,
     message: "",
-    confirming: "none",
-    creating: false,
-    createName: "",
-    actionLoading: false,
-    actionLabel: "",
+    dialog: { kind: "none" },
     preview: "",
     previewPath: "",
     previewLoading: false,
@@ -80,10 +74,10 @@ const App = () => {
 
     if (nextSources.length === 0) {
       setView("sources");
-      setAddingSource(true);
       setState((current) => ({
         ...current,
         loading: false,
+        dialog: { kind: "add-source", value: "" },
         message: "Add a repo root to get started.",
       }));
       return;
@@ -93,7 +87,7 @@ const App = () => {
   }, []);
 
   useEffect(() => {
-    if (!(state.loading || state.previewLoading || state.actionLoading)) {
+    if (!(state.loading || state.previewLoading || state.dialog.kind === "running")) {
       return;
     }
 
@@ -104,7 +98,7 @@ const App = () => {
     return () => {
       clearInterval(interval);
     };
-  }, [state.loading, state.previewLoading, state.actionLoading]);
+  }, [state.loading, state.previewLoading, state.dialog.kind]);
 
   useEffect(() => {
     if (view !== "worktrees") {
@@ -194,20 +188,22 @@ const App = () => {
   }, [view, state.items, state.selected, previewReloadNonce]);
 
   useInput((input, key) => {
-    if (state.loading || state.actionLoading) {
+    if (state.loading || state.dialog.kind === "running") {
       return;
     }
 
-    if (addingSource) {
+    if (state.dialog.kind === "add-source") {
       if (key.escape) {
-        setAddingSource(false);
-        setSourceInput("");
-        setState((current) => ({ ...current, message: "Cancelled" }));
+        setState((current) => ({
+          ...current,
+          dialog: { kind: "none" },
+          message: "Cancelled",
+        }));
         return;
       }
 
       if (key.return) {
-        const nextPath = sourceInput.trim();
+        const nextPath = state.dialog.value.trim();
         if (!nextPath) {
           setState((current) => ({ ...current, message: "Enter a repo path" }));
           return;
@@ -244,21 +240,40 @@ const App = () => {
 
         const nextSources = [...sources, nextEntry];
         writeSources(nextSources);
-        setAddingSource(false);
-        setSourceInput("");
         setSources(nextSources);
         setSelectedSource(Math.max(nextSources.length - 1, 0));
+        setState((current) => ({ ...current, dialog: { kind: "none" } }));
         refreshItems(`Added source ${nextEntry.path}`, nextSources);
         return;
       }
 
       if (key.backspace || key.delete) {
-        setSourceInput((current) => current.slice(0, -1));
+        setState((current) =>
+          current.dialog.kind === "add-source"
+            ? {
+                ...current,
+                dialog: {
+                  kind: "add-source",
+                  value: current.dialog.value.slice(0, -1),
+                },
+              }
+            : current,
+        );
         return;
       }
 
       if (/^[ -~]$/.test(input)) {
-        setSourceInput((current) => `${current}${input}`);
+        setState((current) =>
+          current.dialog.kind === "add-source"
+            ? {
+                ...current,
+                dialog: {
+                  kind: "add-source",
+                  value: `${current.dialog.value}${input}`,
+                },
+              }
+            : current,
+        );
       }
       return;
     }
@@ -288,9 +303,11 @@ const App = () => {
       }
 
       if (input === "a") {
-        setAddingSource(true);
-        setSourceInput("");
-        setState((current) => ({ ...current, message: "" }));
+        setState((current) => ({
+          ...current,
+          dialog: { kind: "add-source", value: "" },
+          message: "",
+        }));
         return;
       }
 
@@ -313,12 +330,11 @@ const App = () => {
       return;
     }
 
-    if (state.creating) {
+    if (state.dialog.kind === "create") {
       if (key.escape) {
         setState((current) => ({
           ...current,
-          creating: false,
-          createName: "",
+          dialog: { kind: "none" },
           message: "Cancelled",
         }));
         return;
@@ -326,7 +342,7 @@ const App = () => {
 
       if (key.return) {
         const current = state.items[state.selected];
-        const branchName = state.createName.trim();
+        const branchName = state.dialog.value.trim();
 
         if (!current) {
           return;
@@ -344,9 +360,7 @@ const App = () => {
 
         setState((currentState) => ({
           ...currentState,
-          creating: false,
-          actionLoading: true,
-          actionLabel: `Creating worktree ${branchName}…`,
+          dialog: { kind: "running", label: `Creating worktree ${branchName}…` },
           message: "",
         }));
 
@@ -371,9 +385,7 @@ const App = () => {
               ...currentState,
               items,
               selected: nextSelected,
-              createName: "",
-              actionLoading: false,
-              actionLabel: "",
+              dialog: { kind: "none" },
               message,
               preview: "",
               previewPath: items[nextSelected]?.path ?? "",
@@ -385,26 +397,40 @@ const App = () => {
       }
 
       if (key.backspace || key.delete) {
-        setState((current) => ({
-          ...current,
-          createName: current.createName.slice(0, -1),
-        }));
+        setState((current) =>
+          current.dialog.kind === "create"
+            ? {
+                ...current,
+                dialog: {
+                  kind: "create",
+                  value: current.dialog.value.slice(0, -1),
+                },
+              }
+            : current,
+        );
         return;
       }
 
       if (/^[A-Za-z0-9._/-]$/.test(input)) {
-        setState((current) => ({
-          ...current,
-          createName: `${current.createName}${input}`,
-        }));
+        setState((current) =>
+          current.dialog.kind === "create"
+            ? {
+                ...current,
+                dialog: {
+                  kind: "create",
+                  value: `${current.dialog.value}${input}`,
+                },
+              }
+            : current,
+        );
       }
       return;
     }
 
-    if (state.confirming !== "none") {
+    if (state.dialog.kind === "confirm") {
       if (input === "y") {
         const current = state.items[state.selected];
-        const actionMode = state.confirming;
+        const actionMode = state.dialog.mode;
         if (current && current.kind === "worktree") {
           const actionLabel =
             actionMode === "kill"
@@ -413,11 +439,7 @@ const App = () => {
 
           setState((currentState) => ({
             ...currentState,
-            confirming: "none",
-            creating: false,
-            createName: "",
-            actionLoading: true,
-            actionLabel,
+            dialog: { kind: "running", label: actionLabel },
             message: "",
           }));
 
@@ -436,8 +458,7 @@ const App = () => {
                 ...currentState,
                 items,
                 selected: nextSelected,
-                actionLoading: false,
-                actionLabel: "",
+                dialog: { kind: "none" },
                 message,
                 preview: "",
                 previewPath: items[nextSelected]?.path ?? "",
@@ -454,7 +475,7 @@ const App = () => {
       ) {
         setState((current) => ({
           ...current,
-          confirming: "none",
+          dialog: { kind: "none" },
           message: "Cancelled",
         }));
       }
@@ -509,14 +530,20 @@ const App = () => {
 
     if (input === "d") {
       if (state.items[state.selected]?.kind === "worktree") {
-        setState((current) => ({ ...current, confirming: "kill" }));
+        setState((current) => ({
+          ...current,
+          dialog: { kind: "confirm", mode: "kill" },
+        }));
       }
       return;
     }
 
     if (input === "x") {
       if (state.items[state.selected]?.kind === "worktree") {
-        setState((current) => ({ ...current, confirming: "remove" }));
+        setState((current) => ({
+          ...current,
+          dialog: { kind: "confirm", mode: "remove" },
+        }));
       }
       return;
     }
@@ -524,8 +551,7 @@ const App = () => {
     if (input === "c") {
       setState((current) => ({
         ...current,
-        creating: true,
-        createName: "",
+        dialog: { kind: "create", value: "" },
         message: "",
       }));
     }
@@ -567,7 +593,10 @@ const App = () => {
   const currentSource = sources[selectedSource];
   const current = state.items[state.selected];
   const createTargetPath = current
-    ? suggestedCreateTargetDir(current.path, state.createName || "<branch>")
+    ? suggestedCreateTargetDir(
+        current.path,
+        state.dialog.kind === "create" ? state.dialog.value || "<branch>" : "<branch>",
+      )
     : "";
   const previewMatchesCurrent = current?.kind === "worktree"
     ? state.previewPath === current.path && !state.previewLoading
@@ -600,11 +629,6 @@ const App = () => {
     0,
     allPreviewChanges.length - previewChanges.length,
   );
-  const dialogOpen =
-    addingSource ||
-    state.creating ||
-    state.confirming !== "none" ||
-    state.actionLoading;
 
   return (
     <Box
@@ -649,9 +673,7 @@ const App = () => {
 
       <StatusLine
         message={state.message}
-        actionLoading={state.actionLoading}
-        actionLabel={state.actionLabel}
-        dialogOpen={dialogOpen}
+        dialog={state.dialog}
         view={view}
         statusBoxHeight={statusBoxHeight}
       />
@@ -663,18 +685,11 @@ const App = () => {
       />
 
       <DialogOverlay
-        dialogOpen={dialogOpen}
+        dialog={state.dialog}
         rootHeight={rootHeight}
         isSplit={isSplit}
-        addingSource={addingSource}
-        creating={state.creating}
-        confirming={state.confirming}
-        actionLoading={state.actionLoading}
         current={current}
-        sourceInput={sourceInput}
-        createName={state.createName}
         createTargetPath={createTargetPath}
-        actionLabel={state.actionLabel}
         loadingGlyph={loadingGlyph}
       />
     </Box>

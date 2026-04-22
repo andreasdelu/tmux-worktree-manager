@@ -8,8 +8,15 @@ export type Item = {
   hasSession: boolean;
 };
 
-export type ActionMode = "none" | "kill" | "remove";
+export type ActionMode = "kill" | "remove";
 export type ViewMode = "worktrees" | "sources";
+
+export type DialogState =
+  | { kind: "none" }
+  | { kind: "add-source"; value: string }
+  | { kind: "create"; value: string }
+  | { kind: "confirm"; mode: ActionMode }
+  | { kind: "running"; label: string };
 
 export type SourceEntry = {
   raw: string;
@@ -24,11 +31,7 @@ export type AppState = {
   items: Item[];
   selected: number;
   message: string;
-  confirming: ActionMode;
-  creating: boolean;
-  createName: string;
-  actionLoading: boolean;
-  actionLabel: string;
+  dialog: DialogState;
   preview: string;
   previewPath: string;
   previewLoading: boolean;

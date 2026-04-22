@@ -1,6 +1,6 @@
 import React from "react";
 import { Box, Text } from "ink";
-import type { ActionMode, Item, SourceEntry, ViewMode } from "./types";
+import type { DialogState, Item, SourceEntry, ViewMode } from "./types";
 
 type PreviewMetaRow = { label: string; value: string };
 
@@ -300,18 +300,14 @@ export const DetailsPane = ({
 
 type StatusLineProps = {
   message: string;
-  actionLoading: boolean;
-  actionLabel: string;
-  dialogOpen: boolean;
+  dialog: DialogState;
   view: ViewMode;
   statusBoxHeight: number;
 };
 
 export const StatusLine = ({
   message,
-  actionLoading,
-  actionLabel,
-  dialogOpen,
+  dialog,
   view,
   statusBoxHeight,
 }: StatusLineProps) => (
@@ -321,12 +317,12 @@ export const StatusLine = ({
     borderColor="gray"
     paddingX={1}
   >
-    <Text color={message || actionLoading ? "cyan" : "gray"}>
+    <Text color={message || dialog.kind === "running" ? "cyan" : "gray"}>
       {message
         ? message
-        : actionLoading
-          ? actionLabel || "Working…"
-          : dialogOpen
+        : dialog.kind === "running"
+          ? dialog.label || "Working…"
+          : dialog.kind !== "none"
             ? "Dialog open. Press esc to cancel."
             : view === "worktrees"
               ? "Ready."
@@ -354,77 +350,59 @@ export const HelpLine = ({ view, keybindLegendHeight, current }: HelpLineProps) 
 );
 
 type DialogOverlayProps = {
-  dialogOpen: boolean;
+  dialog: DialogState;
   rootHeight: number;
   isSplit: boolean;
-  addingSource: boolean;
-  creating: boolean;
-  confirming: ActionMode;
-  actionLoading: boolean;
   current?: Item;
-  sourceInput: string;
-  createName: string;
   createTargetPath: string;
-  actionLabel: string;
   loadingGlyph: string;
 };
 
 export const DialogOverlay = ({
-  dialogOpen,
+  dialog,
   rootHeight,
   isSplit,
-  addingSource,
-  creating,
-  confirming,
-  actionLoading,
   current,
-  sourceInput,
-  createName,
   createTargetPath,
-  actionLabel,
   loadingGlyph,
 }: DialogOverlayProps) => {
-  if (!dialogOpen) {
+  if (dialog.kind === "none") {
     return null;
   }
 
-  const title = addingSource
+  const title = dialog.kind === "add-source"
     ? "Add repo root"
-    : creating
+    : dialog.kind === "create"
       ? "Create worktree"
-      : confirming === "kill"
-        ? `Close tmux session for ${current?.name}?`
-        : confirming === "remove"
-          ? `Remove clean linked worktree ${current?.name}?`
-          : actionLoading
-            ? actionLabel || "Working…"
-            : "";
+      : dialog.kind === "confirm"
+        ? dialog.mode === "kill"
+          ? `Close tmux session for ${current?.name}?`
+          : `Remove clean linked worktree ${current?.name}?`
+        : dialog.label || "Working…";
 
-  const subtitle = addingSource
+  const subtitle = dialog.kind === "add-source"
     ? "Add a repository root so its linked worktrees can appear in the picker."
-    : creating && current
+    : dialog.kind === "create" && current
       ? current.kind === "source-empty"
         ? `Create the first linked worktree from ${current.group}.`
         : `Create a new worktree from ${current.group}.`
-      : confirming === "kill"
-        ? "This only closes the matching tmux session."
-        : confirming === "remove"
-          ? "This removes the linked worktree after the safety checks pass."
-          : actionLoading
-            ? "Please wait while the action completes."
-            : "";
+      : dialog.kind === "confirm"
+        ? dialog.mode === "kill"
+          ? "This only closes the matching tmux session."
+          : "This removes the linked worktree after the safety checks pass."
+        : "Please wait while the action completes.";
 
-  const footer = addingSource
+  const footer = dialog.kind === "add-source"
     ? "enter save • esc cancel"
-    : creating
+    : dialog.kind === "create"
       ? "enter create • esc cancel"
-      : confirming !== "none"
+      : dialog.kind === "confirm"
         ? "y confirm • n cancel • esc cancel"
         : "";
 
-  const borderColor = actionLoading
+  const borderColor = dialog.kind === "running"
     ? "cyan"
-    : confirming !== "none"
+    : dialog.kind === "confirm"
       ? "yellow"
       : "gray";
 
@@ -445,8 +423,8 @@ export const DialogOverlay = ({
         flexDirection="column"
         backgroundColor="#1D1D20"
       >
-        <Text bold color={actionLoading ? "cyan" : "white"}>
-          {actionLoading ? `${loadingGlyph} ${title}` : title}
+        <Text bold color={dialog.kind === "running" ? "cyan" : "white"}>
+          {dialog.kind === "running" ? `${loadingGlyph} ${title}` : title}
         </Text>
         {subtitle ? (
           <Box marginTop={1}>
@@ -454,18 +432,18 @@ export const DialogOverlay = ({
           </Box>
         ) : null}
 
-        {addingSource ? (
+        {dialog.kind === "add-source" ? (
           <Box flexDirection="column" marginTop={1}>
             <Text color="gray">Repository path</Text>
             <Box borderStyle="round" borderColor="gray" paddingX={1}>
-              <Text color="white">{sourceInput || "_"}</Text>
+              <Text color="white">{dialog.value || "_"}</Text>
             </Box>
           </Box>
-        ) : creating ? (
+        ) : dialog.kind === "create" ? (
           <Box flexDirection="column" marginTop={1}>
             <Text color="gray">Branch name</Text>
             <Box borderStyle="round" borderColor="gray" paddingX={1}>
-              <Text color="white">{createName || "_"}</Text>
+              <Text color="white">{dialog.value || "_"}</Text>
             </Box>
             <Box marginTop={1} flexDirection="column">
               <Text color="gray">Target path</Text>
