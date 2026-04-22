@@ -1,13 +1,10 @@
 import React from "react";
 import { Box, Text } from "ink";
 import type { DialogState, Item, SourceEntry, ViewMode } from "./types";
-import { AddSourceDialog } from "./components/AddSourceDialog";
-import {
-  confirmDialogSubtitle,
-  confirmDialogTitle,
-} from "./components/ConfirmDialog";
-import { CreateWorktreeDialog } from "./components/CreateWorktreeDialog";
-import { runningDialogSubtitle } from "./components/RunningDialog";
+import { AddSourceOverlay } from "./components/AddSourceOverlay";
+import { ConfirmOverlay } from "./components/ConfirmOverlay";
+import { CreateWorktreeOverlay } from "./components/CreateWorktreeOverlay";
+import { RunningOverlay } from "./components/RunningOverlay";
 import { SourceDetails } from "./components/SourceDetails";
 import { WorktreeDetails } from "./components/WorktreeDetails";
 import { WorktreeEmptyState } from "./components/WorktreeEmptyState";
@@ -284,83 +281,44 @@ export const DialogOverlay = ({
   createTargetPath,
   loadingGlyph,
 }: DialogOverlayProps) => {
-  if (dialog.kind === "none") {
-    return null;
+  switch (dialog.kind) {
+    case "none":
+      return null;
+    case "add-source":
+      return (
+        <AddSourceOverlay
+          rootHeight={rootHeight}
+          isSplit={isSplit}
+          value={dialog.value}
+        />
+      );
+    case "create":
+      return (
+        <CreateWorktreeOverlay
+          rootHeight={rootHeight}
+          isSplit={isSplit}
+          current={current}
+          value={dialog.value}
+          createTargetPath={createTargetPath}
+        />
+      );
+    case "confirm":
+      return (
+        <ConfirmOverlay
+          rootHeight={rootHeight}
+          isSplit={isSplit}
+          mode={dialog.mode}
+          currentName={current?.name}
+        />
+      );
+    case "running":
+      return (
+        <RunningOverlay
+          rootHeight={rootHeight}
+          isSplit={isSplit}
+          loadingGlyph={loadingGlyph}
+          label={dialog.label}
+        />
+      );
   }
-
-  const title = dialog.kind === "add-source"
-    ? "Add repo root"
-    : dialog.kind === "create"
-      ? "Create worktree"
-      : dialog.kind === "confirm"
-        ? confirmDialogTitle({ mode: dialog.mode, currentName: current?.name })
-        : dialog.label || "Working…";
-
-  const subtitle = dialog.kind === "add-source"
-    ? "Add a repository root so its linked worktrees can appear in the picker."
-    : dialog.kind === "create" && current
-      ? current.kind === "source-empty"
-        ? `Create the first linked worktree from ${current.group}.`
-        : `Create a new worktree from ${current.group}.`
-      : dialog.kind === "confirm"
-        ? confirmDialogSubtitle({ mode: dialog.mode })
-        : runningDialogSubtitle();
-
-  const footer = dialog.kind === "add-source"
-    ? "enter save • esc cancel"
-    : dialog.kind === "create"
-      ? "enter create • esc cancel"
-      : dialog.kind === "confirm"
-        ? "y confirm • n cancel • esc cancel"
-        : "";
-
-  const borderColor = dialog.kind === "running"
-    ? "cyan"
-    : dialog.kind === "confirm"
-      ? "yellow"
-      : "gray";
-
-  return (
-    <Box
-      position="absolute"
-      top={Math.max(2, Math.floor(rootHeight / 5))}
-      left={2}
-      right={2}
-      justifyContent="center"
-    >
-      <Box
-        width={isSplit ? 75 : undefined}
-        borderStyle="round"
-        borderColor={borderColor}
-        paddingX={2}
-        paddingY={1}
-        flexDirection="column"
-        backgroundColor="#1D1D20"
-      >
-        <Text bold color={dialog.kind === "running" ? "cyan" : "white"}>
-          {dialog.kind === "running" ? `${loadingGlyph} ${title}` : title}
-        </Text>
-        {subtitle ? (
-          <Box marginTop={1}>
-            <Text color="gray">{subtitle}</Text>
-          </Box>
-        ) : null}
-
-        {dialog.kind === "add-source" ? (
-          <AddSourceDialog value={dialog.value} />
-        ) : dialog.kind === "create" ? (
-          <CreateWorktreeDialog
-            value={dialog.value}
-            createTargetPath={createTargetPath}
-          />
-        ) : null}
-
-        {footer ? (
-          <Box marginTop={1}>
-            <Text color="gray">{footer}</Text>
-          </Box>
-        ) : null}
-      </Box>
-    </Box>
-  );
 };
