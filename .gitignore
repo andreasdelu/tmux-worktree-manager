@@ -2,3 +2,4 @@ node_modules/
 .bun/
 *.bun-build
 dist/
+.DS_Store

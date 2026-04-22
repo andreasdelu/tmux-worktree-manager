@@ -1,0 +1,83 @@
+name: release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: build-${{ matrix.os }}-${{ matrix.arch }}
+    runs-on: ${{ matrix.runs-on }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runs-on: ubuntu-24.04
+            os: linux
+            arch: x64
+          - runs-on: ubuntu-24.04-arm
+            os: linux
+            arch: arm64
+          - runs-on: macos-13
+            os: darwin
+            arch: x64
+          - runs-on: macos-14
+            os: darwin
+            arch: arm64
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Build release binary
+        run: |
+          mkdir -p dist/release
+          bun build \
+            --compile \
+            --format=esm \
+            --minify \
+            --sourcemap \
+            --bytecode \
+            src/index.tsx \
+            --outfile "dist/release/twm-${{ matrix.os }}-${{ matrix.arch }}"
+          chmod +x "dist/release/twm-${{ matrix.os }}-${{ matrix.arch }}"
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: twm-${{ matrix.os }}-${{ matrix.arch }}
+          path: dist/release/twm-${{ matrix.os }}-${{ matrix.arch }}
+          if-no-files-found: error
+
+  publish:
+    name: publish-release
+    needs: build
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: dist/release
+
+      - name: Normalize artifact permissions
+        run: find dist/release -type f -exec chmod +x {} +
+
+      - name: Publish GitHub release assets
+        uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true
+          files: |
+            dist/release/**/twm-*
