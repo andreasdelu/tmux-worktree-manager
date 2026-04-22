@@ -36,7 +36,6 @@ export const DialogFrame = ({
       paddingX={2}
       paddingY={1}
       flexDirection="column"
-      backgroundColor="#1D1D20"
     >
       <Text bold color={titleColor}>
         {title}
