@@ -6,9 +6,12 @@ import { ConfirmOverlay } from "./components/ConfirmOverlay";
 import { CreateWorktreeOverlay } from "./components/CreateWorktreeOverlay";
 import { NoticeOverlay } from "./components/NoticeOverlay";
 import { RunningOverlay } from "./components/RunningOverlay";
+import { SidebarTabs } from "./components/SidebarTabs";
 import { SourceDetails } from "./components/SourceDetails";
+import { SourceSidebar } from "./components/SourceSidebar";
 import { WorktreeDetails } from "./components/WorktreeDetails";
 import { WorktreeEmptyState } from "./components/WorktreeEmptyState";
+import { WorktreeSidebar } from "./components/WorktreeSidebar";
 
 type PreviewMetaRow = { label: string; value: string };
 
@@ -36,110 +39,33 @@ export const SidebarPane = ({
   selectedSource,
   isSplit,
   mainPanelsHeight,
-}: SidebarPaneProps) => {
-  let lastGroup = "";
-
-  return (
-    <Box
-      flexDirection="column"
-      width={isSplit ? "33%" : undefined}
-      flexGrow={isSplit ? 0 : 1}
-      minHeight={isSplit ? mainPanelsHeight : undefined}
-      borderStyle="round"
-      borderColor="gray"
-      paddingX={1}
-    >
-      <Box marginBottom={1}>
-        {view === "worktrees" ? (
-          <Box flexDirection="row" gap={1}>
-            <Text color="blue">Worktrees</Text>
-            <Text color="gray">|</Text>
-            <Text color="gray">Sources</Text>
-          </Box>
-        ) : (
-          <Box flexDirection="row" gap={1}>
-            <Text color="gray">Worktrees</Text>
-            <Text color="gray">|</Text>
-            <Text color="blue">Sources</Text>
-          </Box>
-        )}
-      </Box>
-      {view === "worktrees" ? (
-        loading ? (
-          <>
-            <Text color="cyan">{loadingGlyph} Loading worktrees…</Text>
-            <Text color="gray">
-              Scanning configured repositories and linked worktrees.
-            </Text>
-          </>
-        ) : (
-          visibleRows.map((item, idx) => {
-            const absoluteIndex = visibleStart + idx;
-            const showGroup = item.group !== lastGroup;
-            const isSelected = absoluteIndex === selected;
-            lastGroup = item.group;
-
-            return (
-              <Box
-                key={item.path}
-                flexDirection="column"
-                marginTop={showGroup && absoluteIndex !== 0 ? 1 : 0}
-              >
-                {showGroup ? (
-                  <Box>
-                    <Text bold color="gray">
-                      {item.group}
-                    </Text>
-                  </Box>
-                ) : null}
-                <Box
-                  paddingLeft={1}
-                  paddingRight={1}
-                  backgroundColor={isSelected ? "#12363a" : undefined}
-                >
-                  <Text color={isSelected ? "cyan" : "gray"}>
-                    {isSelected ? "› " : "  "}
-                  </Text>
-                  <Text
-                    bold={item.kind === "worktree"}
-                    color={
-                      isSelected
-                        ? "white"
-                        : item.kind === "source-empty"
-                          ? "gray"
-                          : undefined
-                    }
-                  >
-                    {item.name}
-                  </Text>
-                  {item.hasSession ? (
-                    <Text color={isSelected ? "cyan" : "gray"}> ●</Text>
-                  ) : null}
-                </Box>
-              </Box>
-            );
-          })
-        )
-      ) : sources.length > 0 ? (
-        sources.map((source, index) => {
-          const isSelected = index === selectedSource;
-          return (
-            <Box key={`${source.resolvedPath}:${index}`}>
-              <Text color={isSelected ? "cyan" : "gray"}>
-                {isSelected ? "› " : "  "}
-              </Text>
-              <Text bold color={isSelected ? "white" : undefined}>
-                {source.path}
-              </Text>
-            </Box>
-          );
-        })
-      ) : (
-        <Text color="gray">No repo roots configured yet.</Text>
-      )}
-    </Box>
-  );
-};
+}: SidebarPaneProps) => (
+  <Box
+    flexDirection="column"
+    width={isSplit ? "33%" : undefined}
+    flexGrow={isSplit ? 0 : 1}
+    minHeight={isSplit ? mainPanelsHeight : undefined}
+    borderStyle="round"
+    borderColor="gray"
+    paddingX={1}
+  >
+    <SidebarTabs view={view} />
+    {view === "worktrees" ? (
+      <WorktreeSidebar
+        loading={loading}
+        loadingGlyph={loadingGlyph}
+        visibleRows={visibleRows}
+        visibleStart={visibleStart}
+        selected={selected}
+      />
+    ) : (
+      <SourceSidebar
+        sources={sources}
+        selectedSource={selectedSource}
+      />
+    )}
+  </Box>
+);
 
 type DetailsPaneProps = {
   view: ViewMode;
