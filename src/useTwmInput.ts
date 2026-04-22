@@ -1,6 +1,4 @@
-import type { Dispatch, MutableRefObject, SetStateAction } from "react";
 import { useInput } from "ink";
-import type { AppState, PreviewData, SourceEntry, ViewMode } from "./types";
 import { parseSourceEntry, writeSources } from "./lib/sources";
 import { loadItems } from "./lib/discovery";
 import { waitForPaint } from "./lib/commands";
@@ -10,36 +8,38 @@ import {
   performAction,
   suggestedCreateTargetDir,
 } from "./lib/actions";
+import type { TwmController } from "./useTwmController";
 
 type UseTwmInputArgs = {
   exit: () => void;
-  view: ViewMode;
-  setView: Dispatch<SetStateAction<ViewMode>>;
-  sources: SourceEntry[];
-  setSources: Dispatch<SetStateAction<SourceEntry[]>>;
-  selectedSource: number;
-  setSelectedSource: Dispatch<SetStateAction<number>>;
-  state: AppState;
-  setState: Dispatch<SetStateAction<AppState>>;
-  refreshItems: (message?: string, sourceEntries?: SourceEntry[]) => void;
-  previewCacheRef: MutableRefObject<Map<string, PreviewData>>;
-  setPreviewReloadNonce: Dispatch<SetStateAction<number>>;
+  controller: Pick<
+    TwmController,
+    | "view"
+    | "setView"
+    | "sources"
+    | "setSources"
+    | "selectedSource"
+    | "setSelectedSource"
+    | "state"
+    | "setState"
+    | "refreshItems"
+    | "refreshPreview"
+  >;
 };
 
-export const useTwmInput = ({
-  exit,
-  view,
-  setView,
-  sources,
-  setSources,
-  selectedSource,
-  setSelectedSource,
-  state,
-  setState,
-  refreshItems,
-  previewCacheRef,
-  setPreviewReloadNonce,
-}: UseTwmInputArgs) => {
+export const useTwmInput = ({ exit, controller }: UseTwmInputArgs) => {
+  const {
+    view,
+    setView,
+    sources,
+    setSources,
+    selectedSource,
+    setSelectedSource,
+    state,
+    setState,
+    refreshItems,
+    refreshPreview,
+  } = controller;
   useInput((input, key) => {
     if (state.loading || state.dialog.kind === "running") {
       return;
@@ -368,15 +368,7 @@ export const useTwmInput = ({
     if (input === "r") {
       const current = state.items[state.selected];
       if (current?.kind === "worktree") {
-        previewCacheRef.current.delete(current.path);
-        setState((currentState) => ({
-          ...currentState,
-          message: "",
-          preview: null,
-          previewPath: current.path,
-          previewLoading: true,
-        }));
-        setPreviewReloadNonce((currentNonce) => currentNonce + 1);
+        refreshPreview(current.path);
       }
       return;
     }
