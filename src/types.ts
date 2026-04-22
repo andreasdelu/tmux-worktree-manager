@@ -1,4 +1,7 @@
+export type ItemKind = "worktree" | "source-empty";
+
 export type Item = {
+  kind: ItemKind;
   group: string;
   path: string;
   name: string;

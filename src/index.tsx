@@ -1,6 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { render, Box, useApp, useInput } from "ink";
-import path from "node:path";
 import { ensureConfigDefaults, loadingFrames, previewDebounceMs } from "./config";
 import type { AppState, SourceEntry, ViewMode } from "./types";
 import {
@@ -12,7 +11,12 @@ import {
 import { loadItems } from "./lib/discovery";
 import { startPreviewLoad } from "./lib/preview";
 import { waitForPaint } from "./lib/commands";
-import { createItem, openItem, performAction } from "./lib/actions";
+import {
+  createItem,
+  openItem,
+  performAction,
+  suggestedCreateTargetDir,
+} from "./lib/actions";
 import {
   DetailsPane,
   DialogOverlay,
@@ -65,7 +69,7 @@ const App = () => {
         message,
         preview: "",
         previewPath: items[nextSelected]?.path ?? "",
-        previewLoading: items.length > 0,
+        previewLoading: items[nextSelected]?.kind === "worktree",
       };
     });
   };
@@ -114,6 +118,16 @@ const App = () => {
         ...existing,
         preview: "",
         previewPath: "",
+        previewLoading: false,
+      }));
+      return;
+    }
+
+    if (current.kind === "source-empty") {
+      setState((existing) => ({
+        ...existing,
+        preview: "",
+        previewPath: current.path,
         previewLoading: false,
       }));
       return;
@@ -318,6 +332,8 @@ const App = () => {
           return;
         }
 
+        const createdTargetDir = suggestedCreateTargetDir(current.path, branchName);
+
         if (!branchName) {
           setState((currentState) => ({
             ...currentState,
@@ -340,9 +356,8 @@ const App = () => {
           const items = loadItems(sources);
 
           setState((currentState) => {
-            const createdName = path.basename(branchName);
             const createdIndex = items.findIndex(
-              (item) => item.name === createdName,
+              (item) => item.path === createdTargetDir,
             );
             const nextSelected =
               createdIndex >= 0
@@ -362,7 +377,7 @@ const App = () => {
               message,
               preview: "",
               previewPath: items[nextSelected]?.path ?? "",
-              previewLoading: items.length > 0,
+              previewLoading: items[nextSelected]?.kind === "worktree",
             };
           });
         })();
@@ -390,7 +405,7 @@ const App = () => {
       if (input === "y") {
         const current = state.items[state.selected];
         const actionMode = state.confirming;
-        if (current) {
+        if (current && current.kind === "worktree") {
           const actionLabel =
             actionMode === "kill"
               ? `Closing tmux session for ${current.name}…`
@@ -426,7 +441,7 @@ const App = () => {
                 message,
                 preview: "",
                 previewPath: items[nextSelected]?.path ?? "",
-                previewLoading: items.length > 0,
+                previewLoading: items[nextSelected]?.kind === "worktree",
               };
             });
           })();
@@ -469,7 +484,7 @@ const App = () => {
 
     if (key.return) {
       const current = state.items[state.selected];
-      if (current) {
+      if (current?.kind === "worktree") {
         openItem(current.path);
         exit();
       }
@@ -478,7 +493,7 @@ const App = () => {
 
     if (input === "r") {
       const current = state.items[state.selected];
-      if (current) {
+      if (current?.kind === "worktree") {
         previewCacheRef.current.delete(current.path);
         setState((currentState) => ({
           ...currentState,
@@ -493,12 +508,16 @@ const App = () => {
     }
 
     if (input === "d") {
-      setState((current) => ({ ...current, confirming: "kill" }));
+      if (state.items[state.selected]?.kind === "worktree") {
+        setState((current) => ({ ...current, confirming: "kill" }));
+      }
       return;
     }
 
     if (input === "x") {
-      setState((current) => ({ ...current, confirming: "remove" }));
+      if (state.items[state.selected]?.kind === "worktree") {
+        setState((current) => ({ ...current, confirming: "remove" }));
+      }
       return;
     }
 
@@ -547,16 +566,19 @@ const App = () => {
 
   const currentSource = sources[selectedSource];
   const current = state.items[state.selected];
-  const previewMatchesCurrent = current
+  const createTargetPath = current
+    ? suggestedCreateTargetDir(current.path, state.createName || "<branch>")
+    : "";
+  const previewMatchesCurrent = current?.kind === "worktree"
     ? state.previewPath === current.path && !state.previewLoading
     : false;
-  const cachedPreview = current
+  const cachedPreview = current?.kind === "worktree"
     ? (previewCacheRef.current.get(current.path) ?? "")
     : "";
   const effectivePreview = previewMatchesCurrent
     ? state.preview
     : cachedPreview;
-  const showPreviewLoading = current ? !effectivePreview : false;
+  const showPreviewLoading = current?.kind === "worktree" ? !effectivePreview : false;
   const previewLines = effectivePreview ? effectivePreview.split("\n") : [];
   const previewPath = previewLines[1] ?? formatPath(current?.path ?? "");
   const previewBody = previewLines
@@ -621,6 +643,7 @@ const App = () => {
           previewChanges={previewChanges}
           hiddenPreviewChanges={hiddenPreviewChanges}
           formatPath={formatPath}
+          createTargetPath={createTargetPath}
         />
       </Box>
 
@@ -633,7 +656,11 @@ const App = () => {
         statusBoxHeight={statusBoxHeight}
       />
 
-      <HelpLine view={view} keybindLegendHeight={keybindLegendHeight} />
+      <HelpLine
+        view={view}
+        keybindLegendHeight={keybindLegendHeight}
+        current={current}
+      />
 
       <DialogOverlay
         dialogOpen={dialogOpen}
@@ -646,6 +673,7 @@ const App = () => {
         current={current}
         sourceInput={sourceInput}
         createName={state.createName}
+        createTargetPath={createTargetPath}
         actionLabel={state.actionLabel}
         loadingGlyph={loadingGlyph}
       />

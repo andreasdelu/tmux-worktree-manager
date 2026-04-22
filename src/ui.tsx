@@ -92,7 +92,16 @@ export const SidebarPane = ({
                   <Text color={isSelected ? "cyan" : "gray"}>
                     {isSelected ? "› " : "  "}
                   </Text>
-                  <Text bold color={isSelected ? "white" : undefined}>
+                  <Text
+                    bold={item.kind === "worktree"}
+                    color={
+                      isSelected
+                        ? "white"
+                        : item.kind === "source-empty"
+                          ? "gray"
+                          : undefined
+                    }
+                  >
                     {item.name}
                   </Text>
                   {item.hasSession ? (
@@ -137,6 +146,7 @@ type DetailsPaneProps = {
   previewChanges: string[];
   hiddenPreviewChanges: number;
   formatPath: (itemPath: string) => string;
+  createTargetPath: string;
 };
 
 export const DetailsPane = ({
@@ -152,6 +162,7 @@ export const DetailsPane = ({
   previewChanges,
   hiddenPreviewChanges,
   formatPath,
+  createTargetPath,
 }: DetailsPaneProps) => (
   <Box
     flexDirection="column"
@@ -169,70 +180,89 @@ export const DetailsPane = ({
     </Box>
     {view === "worktrees" ? (
       current ? (
-        <>
-          <Box flexDirection="row">
-            <Text color="gray">{current.group}\</Text>
+        current.kind === "source-empty" ? (
+          <>
             <Text bold color="cyan">
-              {current.name}
+              {current.group}
             </Text>
-          </Box>
-          {previewPath ? <Text color="gray">{previewPath}</Text> : null}
-          <Text> </Text>
-          {showPreviewLoading ? (
-            <Box flexDirection="column">
-              <Text color="cyan">{loadingGlyph} Loading details…</Text>
-              <Text color="gray">
-                Fetching branch, status, last commit, and changed files.
+            <Text color="gray">{formatPath(current.path)}</Text>
+            <Text> </Text>
+            <Text>No linked worktrees yet for this repo.</Text>
+            <Box marginTop={1} flexDirection="column">
+              <Text color="gray">Next step</Text>
+              <Text>Press c to create the first worktree.</Text>
+            </Box>
+            <Box marginTop={1} flexDirection="column">
+              <Text color="gray">Default path</Text>
+              <Text>{formatPath(createTargetPath)}</Text>
+            </Box>
+          </>
+        ) : (
+          <>
+            <Box flexDirection="row">
+              <Text color="gray">{current.group}\</Text>
+              <Text bold color="cyan">
+                {current.name}
               </Text>
             </Box>
-          ) : (
-            <>
-              <Text bold color="gray">
-                Overview
-              </Text>
-              {previewMetaRows.map((row, index) => (
-                <Box key={`${current.path}:meta:${index}`}>
-                  <Text color="gray">{row.label.padEnd(8, " ")}</Text>
-                  <Text>{row.value}</Text>
-                </Box>
-              ))}
-
-              <Box flexDirection="column" marginTop={1}>
-                <Text bold color="gray">
-                  Changes
+            {previewPath ? <Text color="gray">{previewPath}</Text> : null}
+            <Text> </Text>
+            {showPreviewLoading ? (
+              <Box flexDirection="column">
+                <Text color="cyan">{loadingGlyph} Loading details…</Text>
+                <Text color="gray">
+                  Fetching branch, status, last commit, and changed files.
                 </Text>
-                {previewChanges.length > 0 ? (
-                  <>
-                    {previewChanges.map((line, index) => {
-                      const match = line.match(/^\s*([A-Z\?]{1,2})\s+(.*)$/);
-                      if (match) {
-                        return (
-                          <Box key={`${current.path}:change:${index}`}>
-                            <Text color="gray">{match[1].padEnd(4, " ")}</Text>
-                            <Text>{match[2]}</Text>
-                          </Box>
-                        );
-                      }
-
-                      return (
-                        <Text key={`${current.path}:change:${index}`}>
-                          {line}
-                        </Text>
-                      );
-                    })}
-                    {hiddenPreviewChanges > 0 ? (
-                      <Text color="gray">
-                        +{hiddenPreviewChanges} more changes
-                      </Text>
-                    ) : null}
-                  </>
-                ) : (
-                  <Text color="gray">No uncommitted changes</Text>
-                )}
               </Box>
-            </>
-          )}
-        </>
+            ) : (
+              <>
+                <Text bold color="gray">
+                  Overview
+                </Text>
+                {previewMetaRows.map((row, index) => (
+                  <Box key={`${current.path}:meta:${index}`}>
+                    <Text color="gray">{row.label.padEnd(8, " ")}</Text>
+                    <Text>{row.value}</Text>
+                  </Box>
+                ))}
+
+                <Box flexDirection="column" marginTop={1}>
+                  <Text bold color="gray">
+                    Changes
+                  </Text>
+                  {previewChanges.length > 0 ? (
+                    <>
+                      {previewChanges.map((line, index) => {
+                        const match = line.match(/^\s*([A-Z\?]{1,2})\s+(.*)$/);
+                        if (match) {
+                          return (
+                            <Box key={`${current.path}:change:${index}`}>
+                              <Text color="gray">{match[1].padEnd(4, " ")}</Text>
+                              <Text>{match[2]}</Text>
+                            </Box>
+                          );
+                        }
+
+                        return (
+                          <Text key={`${current.path}:change:${index}`}>
+                            {line}
+                          </Text>
+                        );
+                      })}
+                      {hiddenPreviewChanges > 0 ? (
+                        <Text color="gray">
+                          +{hiddenPreviewChanges} more changes
+                        </Text>
+                      ) : null}
+                    </>
+                  ) : (
+                    <Text color="gray">No uncommitted changes</Text>
+                  )}
+                </Box>
+              </>
+            )}
+          </>
+        )
       ) : (
         <Text>No worktrees found.</Text>
       )
@@ -305,13 +335,19 @@ export const StatusLine = ({
   </Box>
 );
 
-type HelpLineProps = { view: ViewMode; keybindLegendHeight: number };
+type HelpLineProps = {
+  view: ViewMode;
+  keybindLegendHeight: number;
+  current?: Item;
+};
 
-export const HelpLine = ({ view, keybindLegendHeight }: HelpLineProps) => (
+export const HelpLine = ({ view, keybindLegendHeight, current }: HelpLineProps) => (
   <Box paddingX={1} flexDirection="column" minHeight={keybindLegendHeight}>
     <Text color="gray">
       {view === "worktrees"
-        ? "tab sources • j/k move • enter open • r refresh • c create • d close tmux • x remove worktree • q quit"
+        ? current?.kind === "source-empty"
+          ? "tab sources • j/k move • c create first worktree • q quit"
+          : "tab sources • j/k move • enter open • r refresh • c create • d close tmux • x remove worktree • q quit"
         : "tab worktrees • j/k move • a add source • x remove source • q quit"}
     </Text>
   </Box>
@@ -328,6 +364,7 @@ type DialogOverlayProps = {
   current?: Item;
   sourceInput: string;
   createName: string;
+  createTargetPath: string;
   actionLabel: string;
   loadingGlyph: string;
 };
@@ -343,6 +380,7 @@ export const DialogOverlay = ({
   current,
   sourceInput,
   createName,
+  createTargetPath,
   actionLabel,
   loadingGlyph,
 }: DialogOverlayProps) => {
@@ -365,7 +403,9 @@ export const DialogOverlay = ({
   const subtitle = addingSource
     ? "Add a repository root so its linked worktrees can appear in the picker."
     : creating && current
-      ? `Create a new worktree from ${current.group}.`
+      ? current.kind === "source-empty"
+        ? `Create the first linked worktree from ${current.group}.`
+        : `Create a new worktree from ${current.group}.`
       : confirming === "kill"
         ? "This only closes the matching tmux session."
         : confirming === "remove"
@@ -426,6 +466,10 @@ export const DialogOverlay = ({
             <Text color="gray">Branch name</Text>
             <Box borderStyle="round" borderColor="gray" paddingX={1}>
               <Text color="white">{createName || "_"}</Text>
+            </Box>
+            <Box marginTop={1} flexDirection="column">
+              <Text color="gray">Target path</Text>
+              <Text>{createTargetPath}</Text>
             </Box>
           </Box>
         ) : null}

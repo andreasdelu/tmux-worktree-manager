@@ -26,6 +26,7 @@ const parseWorktreeItems = (
     .map((line) => line.slice("worktree ".length).trim())
     .filter(Boolean)
     .map((itemPath) => ({
+      kind: "worktree" as const,
       group: repoName,
       path: itemPath,
       name: path.basename(itemPath),
@@ -43,7 +44,7 @@ export const loadItems = (sourceEntries: SourceEntry[]): Item[] => {
       return [];
     }
 
-    return parseWorktreeItems(source.resolvedPath, sessionNames).filter(
+    const items = parseWorktreeItems(source.resolvedPath, sessionNames).filter(
       (item) => {
         if (seen.has(item.path)) {
           return false;
@@ -52,5 +53,19 @@ export const loadItems = (sourceEntries: SourceEntry[]): Item[] => {
         return true;
       },
     );
+
+    if (items.length > 0) {
+      return items;
+    }
+
+    return [
+      {
+        kind: "source-empty" as const,
+        group: path.basename(source.resolvedPath),
+        path: source.resolvedPath,
+        name: "No linked worktrees yet",
+        hasSession: false,
+      },
+    ];
   });
 };

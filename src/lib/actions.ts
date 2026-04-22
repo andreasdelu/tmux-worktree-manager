@@ -30,12 +30,30 @@ const gitPathForDirAsync = async (
   return path.resolve(resolved);
 };
 
+const isPrimaryWorktree = (dir: string) =>
+  gitPathForDir(dir, "--git-dir") === gitPathForDir(dir, "--git-common-dir");
+
 const isPrimaryWorktreeAsync = async (dir: string) =>
   (await gitPathForDirAsync(dir, "--git-dir")) ===
   (await gitPathForDirAsync(dir, "--git-common-dir"));
 
+const mainRepoForDir = (dir: string) =>
+  path.dirname(gitPathForDir(dir, "--git-common-dir"));
+
 const mainRepoForDirAsync = async (dir: string) =>
   path.dirname(await gitPathForDirAsync(dir, "--git-common-dir"));
+
+const defaultWorktreeRootForRepo = (repoRoot: string) =>
+  path.join(path.dirname(repoRoot), `${path.basename(repoRoot)}-worktrees`);
+
+export const suggestedCreateTargetDir = (dir: string, branchName: string) => {
+  const mainRepo = mainRepoForDir(dir);
+  const targetRoot = isPrimaryWorktree(dir)
+    ? defaultWorktreeRootForRepo(mainRepo)
+    : path.dirname(dir);
+
+  return path.join(targetRoot, branchName);
+};
 
 export const performAction = async (
   mode: Exclude<ActionMode, "none">,
@@ -111,8 +129,7 @@ export const createItem = async (
   branchName: string,
 ): Promise<string> => {
   const mainRepo = await mainRepoForDirAsync(itemPath);
-  const targetRoot = path.dirname(itemPath);
-  const targetDir = path.join(targetRoot, branchName);
+  const targetDir = suggestedCreateTargetDir(itemPath, branchName);
 
   if (fs.existsSync(targetDir)) {
     return `Target already exists: ${path.basename(targetDir)}`;

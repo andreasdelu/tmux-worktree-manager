@@ -63,6 +63,8 @@ Use the actual **git repo root**, not a child directory inside it.
 
 `twm` uses `git worktree list` from each configured repo root and shows linked worktrees from there. The primary checkout is hidden on purpose so the picker stays focused on worktrees.
 
+If a repo has no linked worktrees yet, `twm` shows an empty state instead of treating the source as broken.
+
 ## Everyday use
 
 ### Worktrees view
@@ -83,6 +85,8 @@ Behavior:
 - Opening a worktree switches to its tmux session if it already exists.
 - If no session exists yet, `twm` creates one and applies the default layout.
 - You can customize that new-session behavior in `~/.config/twm/layout.sh`.
+- When creating the first worktree from a repo root, `twm` uses a sibling container by default, like `../repo-worktrees/<branch>`.
+- If you want a different location, create one worktree there manually first; after that, `twm` will inherit that directory for later worktrees from the same repo.
 - Removing a worktree is guarded:
   - it will not remove the primary checkout
   - it will not remove a dirty worktree
