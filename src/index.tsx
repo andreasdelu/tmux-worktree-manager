@@ -227,12 +227,25 @@ const App = () => {
 
   const currentSource = sources[selectedSource];
   const current = state.items[state.selected];
-  const createTargetPath = current
-    ? suggestedCreateTargetDir(
-        current.path,
-        state.dialog.kind === "create" ? state.dialog.value || "<branch>" : "<branch>",
-      )
-    : "";
+  const createTargetPath = useMemo(() => {
+    if (!current) {
+      return "";
+    }
+
+    if (!(current.kind === "source-empty" || state.dialog.kind === "create")) {
+      return "";
+    }
+
+    return suggestedCreateTargetDir(
+      current.path,
+      state.dialog.kind === "create" ? state.dialog.value || "<branch>" : "<branch>",
+    );
+  }, [
+    current?.path,
+    current?.kind,
+    state.dialog.kind,
+    state.dialog.kind === "create" ? state.dialog.value : "",
+  ]);
   const previewMatchesCurrent = current?.kind === "worktree"
     ? state.previewPath === current.path && !state.previewLoading
     : false;

@@ -46,14 +46,25 @@ const mainRepoForDirAsync = async (dir: string) =>
 const defaultWorktreeRootForRepo = (repoRoot: string) =>
   path.join(path.dirname(repoRoot), `${path.basename(repoRoot)}-worktrees`);
 
-export const suggestedCreateTargetDir = (dir: string, branchName: string) => {
+const suggestedTargetRootCache = new Map<string, string>();
+
+const suggestedCreateTargetRoot = (dir: string) => {
+  const cached = suggestedTargetRootCache.get(dir);
+  if (cached) {
+    return cached;
+  }
+
   const mainRepo = mainRepoForDir(dir);
   const targetRoot = isPrimaryWorktree(dir)
     ? defaultWorktreeRootForRepo(mainRepo)
     : path.dirname(dir);
 
-  return path.join(targetRoot, branchName);
+  suggestedTargetRootCache.set(dir, targetRoot);
+  return targetRoot;
 };
+
+export const suggestedCreateTargetDir = (dir: string, branchName: string) =>
+  path.join(suggestedCreateTargetRoot(dir), branchName);
 
 export const performAction = async (
   mode: ActionMode,
