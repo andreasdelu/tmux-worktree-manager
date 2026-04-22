@@ -1,6 +1,16 @@
 import React from "react";
 import { Box, Text } from "ink";
 import type { DialogState, Item, SourceEntry, ViewMode } from "./types";
+import { AddSourceDialog } from "./components/AddSourceDialog";
+import {
+  confirmDialogSubtitle,
+  confirmDialogTitle,
+} from "./components/ConfirmDialog";
+import { CreateWorktreeDialog } from "./components/CreateWorktreeDialog";
+import { runningDialogSubtitle } from "./components/RunningDialog";
+import { SourceDetails } from "./components/SourceDetails";
+import { WorktreeDetails } from "./components/WorktreeDetails";
+import { WorktreeEmptyState } from "./components/WorktreeEmptyState";
 
 type PreviewMetaRow = { label: string; value: string };
 
@@ -181,119 +191,27 @@ export const DetailsPane = ({
     {view === "worktrees" ? (
       current ? (
         current.kind === "source-empty" ? (
-          <>
-            <Text bold color="cyan">
-              {current.group}
-            </Text>
-            <Text color="gray">{formatPath(current.path)}</Text>
-            <Text> </Text>
-            <Text>No linked worktrees yet for this repo.</Text>
-            <Box marginTop={1} flexDirection="column">
-              <Text color="gray">Next step</Text>
-              <Text>Press c to create the first worktree.</Text>
-            </Box>
-            <Box marginTop={1} flexDirection="column">
-              <Text color="gray">Default path</Text>
-              <Text>{formatPath(createTargetPath)}</Text>
-            </Box>
-          </>
+          <WorktreeEmptyState
+            current={current}
+            createTargetPath={createTargetPath}
+            formatPath={formatPath}
+          />
         ) : (
-          <>
-            <Box flexDirection="row">
-              <Text color="gray">{current.group}\</Text>
-              <Text bold color="cyan">
-                {current.name}
-              </Text>
-            </Box>
-            {previewPath ? <Text color="gray">{previewPath}</Text> : null}
-            <Text> </Text>
-            {showPreviewLoading ? (
-              <Box flexDirection="column">
-                <Text color="cyan">{loadingGlyph} Loading details…</Text>
-                <Text color="gray">
-                  Fetching branch, status, last commit, and changed files.
-                </Text>
-              </Box>
-            ) : (
-              <>
-                <Text bold color="gray">
-                  Overview
-                </Text>
-                {previewMetaRows.map((row, index) => (
-                  <Box key={`${current.path}:meta:${index}`}>
-                    <Text color="gray">{row.label.padEnd(8, " ")}</Text>
-                    <Text>{row.value}</Text>
-                  </Box>
-                ))}
-
-                <Box flexDirection="column" marginTop={1}>
-                  <Text bold color="gray">
-                    Changes
-                  </Text>
-                  {previewChanges.length > 0 ? (
-                    <>
-                      {previewChanges.map((line, index) => {
-                        const match = line.match(/^\s*([A-Z\?]{1,2})\s+(.*)$/);
-                        if (match) {
-                          return (
-                            <Box key={`${current.path}:change:${index}`}>
-                              <Text color="gray">{match[1].padEnd(4, " ")}</Text>
-                              <Text>{match[2]}</Text>
-                            </Box>
-                          );
-                        }
-
-                        return (
-                          <Text key={`${current.path}:change:${index}`}>
-                            {line}
-                          </Text>
-                        );
-                      })}
-                      {hiddenPreviewChanges > 0 ? (
-                        <Text color="gray">
-                          +{hiddenPreviewChanges} more changes
-                        </Text>
-                      ) : null}
-                    </>
-                  ) : (
-                    <Text color="gray">No uncommitted changes</Text>
-                  )}
-                </Box>
-              </>
-            )}
-          </>
+          <WorktreeDetails
+            current={current}
+            previewPath={previewPath}
+            showPreviewLoading={showPreviewLoading}
+            loadingGlyph={loadingGlyph}
+            previewMetaRows={previewMetaRows}
+            previewChanges={previewChanges}
+            hiddenPreviewChanges={hiddenPreviewChanges}
+          />
         )
       ) : (
         <Text>No worktrees found.</Text>
       )
-    ) : currentSource ? (
-      <>
-        <Text bold color="cyan">
-          {currentSource.path}
-        </Text>
-        <Text> </Text>
-        <Box>
-          <Text color="gray">Status </Text>
-          <Text color={currentSource.valid ? "green" : "yellow"}>
-            {currentSource.valid ? "ready" : currentSource.issue}
-          </Text>
-        </Box>
-        {currentSource.resolvedPath !== currentSource.path ? (
-          <Box>
-            <Text color="gray">Resolved </Text>
-            <Text>{formatPath(currentSource.resolvedPath)}</Text>
-          </Box>
-        ) : null}
-        {!currentSource.valid ? (
-          <Box marginTop={1}>
-            <Text color="gray">
-              Add the actual git repo root, not a child folder inside it.
-            </Text>
-          </Box>
-        ) : null}
-      </>
     ) : (
-      <Text color="gray">Add a repo root to start browsing more repos.</Text>
+      <SourceDetails currentSource={currentSource} formatPath={formatPath} />
     )}
   </Box>
 );
@@ -375,9 +293,7 @@ export const DialogOverlay = ({
     : dialog.kind === "create"
       ? "Create worktree"
       : dialog.kind === "confirm"
-        ? dialog.mode === "kill"
-          ? `Close tmux session for ${current?.name}?`
-          : `Remove clean linked worktree ${current?.name}?`
+        ? confirmDialogTitle({ mode: dialog.mode, currentName: current?.name })
         : dialog.label || "Working…";
 
   const subtitle = dialog.kind === "add-source"
@@ -387,10 +303,8 @@ export const DialogOverlay = ({
         ? `Create the first linked worktree from ${current.group}.`
         : `Create a new worktree from ${current.group}.`
       : dialog.kind === "confirm"
-        ? dialog.mode === "kill"
-          ? "This only closes the matching tmux session."
-          : "This removes the linked worktree after the safety checks pass."
-        : "Please wait while the action completes.";
+        ? confirmDialogSubtitle({ mode: dialog.mode })
+        : runningDialogSubtitle();
 
   const footer = dialog.kind === "add-source"
     ? "enter save • esc cancel"
@@ -433,23 +347,12 @@ export const DialogOverlay = ({
         ) : null}
 
         {dialog.kind === "add-source" ? (
-          <Box flexDirection="column" marginTop={1}>
-            <Text color="gray">Repository path</Text>
-            <Box borderStyle="round" borderColor="gray" paddingX={1}>
-              <Text color="white">{dialog.value || "_"}</Text>
-            </Box>
-          </Box>
+          <AddSourceDialog value={dialog.value} />
         ) : dialog.kind === "create" ? (
-          <Box flexDirection="column" marginTop={1}>
-            <Text color="gray">Branch name</Text>
-            <Box borderStyle="round" borderColor="gray" paddingX={1}>
-              <Text color="white">{dialog.value || "_"}</Text>
-            </Box>
-            <Box marginTop={1} flexDirection="column">
-              <Text color="gray">Target path</Text>
-              <Text>{createTargetPath}</Text>
-            </Box>
-          </Box>
+          <CreateWorktreeDialog
+            value={dialog.value}
+            createTargetPath={createTargetPath}
+          />
         ) : null}
 
         {footer ? (
