@@ -8,6 +8,7 @@ type DialogFrameProps = {
   title: string;
   titleColor?: string;
   subtitle?: string;
+  subtitleColor?: string;
   footer?: string;
   children?: React.ReactNode;
 };
@@ -19,6 +20,7 @@ export const DialogFrame = ({
   title,
   titleColor = "white",
   subtitle,
+  subtitleColor = "white",
   footer,
   children,
 }: DialogFrameProps) => (
@@ -42,7 +44,7 @@ export const DialogFrame = ({
       </Text>
       {subtitle ? (
         <Box marginTop={1}>
-          <Text color="gray">{subtitle}</Text>
+          <Text color={subtitleColor}>{subtitle}</Text>
         </Box>
       ) : null}
       {children}
