@@ -59,11 +59,14 @@ jobs:
             --outfile "dist/release/twm-${{ matrix.os }}-${{ matrix.arch }}"
           chmod +x "dist/release/twm-${{ matrix.os }}-${{ matrix.arch }}"
 
+      - name: Compress release binary
+        run: gzip -9 -c "dist/release/twm-${{ matrix.os }}-${{ matrix.arch }}" > "dist/release/twm-${{ matrix.os }}-${{ matrix.arch }}.gz"
+
       - name: Upload build artifact
         uses: actions/upload-artifact@v4
         with:
-          name: twm-${{ matrix.os }}-${{ matrix.arch }}
-          path: dist/release/twm-${{ matrix.os }}-${{ matrix.arch }}
+          name: twm-${{ matrix.os }}-${{ matrix.arch }}.gz
+          path: dist/release/twm-${{ matrix.os }}-${{ matrix.arch }}.gz
           if-no-files-found: error
 
   publish:
@@ -85,4 +88,4 @@ jobs:
         with:
           generate_release_notes: true
           files: |
-            dist/release/**/twm-*
+            dist/release/**/twm-*.gz

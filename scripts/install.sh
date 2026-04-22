@@ -28,7 +28,7 @@ arch() {
 }
 
 download_binary() {
-  local os cpu asset url tmp
+  local os cpu asset base_url tmp_gz
 
   os="$(platform)" || {
     printf 'twm: unsupported platform for binary download\n' >&2
@@ -45,24 +45,34 @@ download_binary() {
     return 1
   fi
 
-  asset="twm-${os}-${cpu}"
-  if [ "$version" = "latest" ]; then
-    url="https://github.com/${release_repo}/releases/latest/download/${asset}"
-  else
-    url="https://github.com/${release_repo}/releases/download/${version}/${asset}"
-  fi
-
-  mkdir -p "$repo_dir/dist"
-  tmp="$(mktemp "${TMPDIR:-/tmp}/twm-download.XXXXXX")"
-
-  printf 'twm: downloading %s\n' "$url" >&2
-  if ! curl -fsSL "$url" -o "$tmp"; then
-    rm -f "$tmp"
+  if ! command -v gzip >/dev/null 2>&1; then
+    printf 'twm: gzip is required for compressed release assets\n' >&2
     return 1
   fi
 
-  chmod +x "$tmp"
-  mv "$tmp" "$binary"
+  asset="twm-${os}-${cpu}"
+  if [ "$version" = "latest" ]; then
+    base_url="https://github.com/${release_repo}/releases/latest/download/${asset}"
+  else
+    base_url="https://github.com/${release_repo}/releases/download/${version}/${asset}"
+  fi
+
+  mkdir -p "$repo_dir/dist"
+  tmp_gz="$(mktemp "${TMPDIR:-/tmp}/twm-download.XXXXXX.gz")"
+
+  printf 'twm: downloading %s.gz\n' "$base_url" >&2
+  if ! curl -fsSL "${base_url}.gz" -o "$tmp_gz"; then
+    rm -f "$tmp_gz"
+    return 1
+  fi
+
+  if ! gzip -dc "$tmp_gz" > "$binary"; then
+    rm -f "$tmp_gz" "$binary"
+    return 1
+  fi
+
+  chmod 755 "$binary"
+  rm -f "$tmp_gz"
 }
 
 build_binary() {
