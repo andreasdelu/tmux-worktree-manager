@@ -9,17 +9,20 @@
    ╚═╝    ╚══╝╚══╝ ╚═╝     ╚═╝
 ```
 
-`twm` is a tmux popup for jumping between Git worktrees and opening them in ready-to-use tmux sessions.
+`twm` is a tmux popup for browsing Git worktrees and jumping into ready-to-use tmux sessions.
 
-It is built for the common flow:
+## Features
 
-- keep a few repo roots configured
-- see linked worktrees across those repos
-- hit one key to jump into the right session
-- create, close, or remove worktrees without leaving tmux
-- customize new-session layout with `~/.config/twm/layout.sh`
+- tmux popup UI
+- multi-repo worktree browser
+- create / close / remove worktrees from the picker
+- auto-create or attach tmux sessions per worktree
+- global `layout.sh` hook for new sessions only
+- optional Pi Overwatch integration for agent visibility
 
-## Install with TPM
+## Install
+
+### Via TPM
 
 Add the plugin to your tmux config:
 
@@ -39,7 +42,7 @@ By default, `twm` binds:
 
 - `prefix + W`
 
-On first launch it installs the `twm` binary if needed.
+On first launch, `twm` installs the binary if needed.
 
 After that, launching `twm` also refreshes the installed binary automatically when:
 
@@ -47,22 +50,11 @@ After that, launching `twm` also refreshes the installed binary automatically wh
 - `@twm-version` changed
 - `@twm-install-mode` changed
 
-## First run
+## Quick start
 
-Press:
-
-- `prefix + W`
-
-If you have no repo roots configured yet, `twm` opens the add-source flow immediately.
-
-On first boot, `twm` also creates:
-
-- `~/.config/twm/worktree-roots`
-- `~/.config/twm/layout.sh`
-
-`layout.sh` is the hook you can edit to customize what a brand-new tmux session looks like when you open a worktree.
-
-Add a repo root such as:
+1. Press `prefix + W`
+2. If you have no repo roots configured yet, `twm` opens the add-source flow immediately
+3. Add a repo root such as:
 
 ```txt
 ~/twm
@@ -70,11 +62,17 @@ Add a repo root such as:
 
 Use the actual **git repo root**, not a child directory inside it.
 
-`twm` uses `git worktree list` from each configured repo root and shows linked worktrees from there. The primary checkout is hidden on purpose so the picker stays focused on worktrees.
+On first boot, `twm` creates:
 
-If a repo has no linked worktrees yet, `twm` shows an empty state instead of treating the source as broken.
+- `~/.config/twm/worktree-roots`
+- `~/.config/twm/layout.sh`
 
-## Everyday use
+`twm` uses `git worktree list` from each configured repo root and shows linked worktrees from there.
+The primary checkout is hidden.
+
+If a repo has no linked worktrees yet, `twm` shows an empty state.
+
+## Usage
 
 ### Worktrees view
 
@@ -93,9 +91,8 @@ Behavior:
 
 - Opening a worktree switches to its tmux session if it already exists.
 - If no session exists yet, `twm` creates one and applies the default layout.
-- You can customize that new-session behavior in `~/.config/twm/layout.sh`.
 - When creating the first worktree from a repo root, `twm` uses a sibling container by default, like `../repo-worktrees/<branch>`.
-- If you want a different location, create one worktree there manually first; after that, `twm` will inherit that directory for later worktrees from the same repo.
+- If you want a different location, create one worktree there manually first. After that, `twm` inherits that directory for later worktrees from the same repo.
 - Removing a worktree is guarded:
   - it will not remove the primary checkout
   - it will not remove a dirty worktree
@@ -111,13 +108,66 @@ Keys:
 - `tab` — switch back to Worktrees view
 - `q` or `esc` — quit
 
-Source validation is strict:
+Source validation:
 
 - missing paths are rejected
 - duplicates are rejected
 - non-repo roots are rejected
 
-## Config
+## Pi Overwatch integration
+
+`twm` can optionally show Pi agent activity for the selected worktree.
+
+When enabled, it adds:
+
+- a lightweight Pi badge in the worktree list
+- a dedicated **Pi Overwatch** box in the details column
+
+### What it reads
+
+`twm` reads Pi Overwatch agent state from:
+
+```txt
+~/.pi/overwatch/agents/*.json
+```
+
+or from whatever path you set via `@twm-overwatch-dir`.
+
+This only does anything if your Pi sessions are already writing state there via `pi-overwatch`.
+
+Install that separately, for example:
+
+```bash
+pi install npm:pi-overwatch
+```
+
+Repository:
+
+- https://github.com/denismrvoljak/pi-overwatch
+
+### Matching rules
+
+Matching:
+
+1. exact worktree cwd match
+2. exact tmux session name match
+
+If multiple agents match, `twm` shows them as peer instances in the Pi Overwatch table and only pushes offline ones to the bottom in gray.
+
+### Sidebar badge behavior
+
+The worktree list badge:
+
+- `π` + spinner when any matched online agent is working
+- `π✓` when all matched online agents are done
+- plain `π` when matched online agents exist but are neither all-done nor actively working
+- no badge when only offline agents are present
+
+### Refresh behavior
+
+When enabled, `twm` refreshes Pi Overwatch badges and details at a low frequency while the Worktrees view is open.
+
+## Configuration
 
 `twm` stores its user config in:
 
@@ -125,12 +175,9 @@ Source validation is strict:
 ${XDG_CONFIG_HOME:-$HOME/.config}/twm/
 ```
 
-On first boot it creates:
+### User config files
 
-- `worktree-roots`
-- `layout.sh`
-
-### `worktree-roots`
+#### `worktree-roots`
 
 One repo root per line.
 
@@ -142,7 +189,7 @@ parent ~/Documents/pax
 parent ~/.dotfiles
 ```
 
-## Layout customization
+#### `layout.sh`
 
 When `twm` creates a **brand-new tmux session**, it can run:
 
@@ -168,9 +215,9 @@ The built-in default layout already gives you:
 - a split main layout
 - a `shell` window
 
-Use `layout.sh` only if you want to customize that behavior further.
+Edit `layout.sh` if you want to customize that behavior.
 
-## Plugin options
+### tmux plugin options
 
 Defaults:
 
@@ -180,19 +227,21 @@ set -g @twm-popup-width '80%'
 set -g @twm-popup-height '80%'
 set -g @twm-version 'latest'
 set -g @twm-install-mode 'auto'
+set -g @twm-overwatch-enable 'off'
+set -g @twm-overwatch-dir '~/.pi/overwatch'
 ```
 
-### `@twm-key`
+#### `@twm-key`
 
 The tmux prefix binding for opening `twm`.
 
 Set it to an empty string to disable the default binding.
 
-### `@twm-popup-width` / `@twm-popup-height`
+#### `@twm-popup-width` / `@twm-popup-height`
 
 Popup size passed to `tmux display-popup`.
 
-### `@twm-version`
+#### `@twm-version`
 
 Which GitHub release to install.
 
@@ -202,7 +251,7 @@ Defaults to:
 
 If you change this value, the next `prefix + W` refreshes the installed binary.
 
-### `@twm-install-mode`
+#### `@twm-install-mode`
 
 Install behavior for the binary:
 
@@ -213,6 +262,30 @@ Install behavior for the binary:
 Most people should leave this at:
 
 - `auto`
+
+#### `@twm-overwatch-enable`
+
+Opt-in Pi Overwatch integration.
+
+Values:
+
+- `off` — default
+- `on` — enable Pi badge + Pi Overwatch details box
+
+#### `@twm-overwatch-dir`
+
+Where `twm` looks for Pi Overwatch state files.
+
+Defaults to:
+
+- `~/.pi/overwatch`
+
+Example:
+
+```tmux
+set -g @twm-overwatch-enable 'on'
+set -g @twm-overwatch-dir '~/.pi/overwatch'
+```
 
 ## Troubleshooting
 
@@ -233,11 +306,11 @@ Add the top-level repo directory itself, not a nested folder inside it.
 
 `auto` mode downloads a compressed release binary first. If that fails and Bun is available, it falls back to a local build.
 
-If you just updated the plugin or changed `@twm-version`, `prefix + W` will try to refresh the installed binary automatically.
+If you just updated the plugin or changed `@twm-version`, `prefix + W` tries to refresh the installed binary automatically.
 
 Release downloads use compressed `.gz` assets.
 
-If you want to force one path while debugging:
+To force one path while debugging:
 
 ```tmux
 set -g @twm-install-mode 'download'
@@ -273,14 +346,3 @@ Outputs:
 - `dist/twm.js`
 - `dist/twm`
 
-## Notes for contributors
-
-Current compile flags intentionally include:
-
-- `--compile`
-- `--format=esm`
-- `--minify`
-- `--sourcemap`
-- `--bytecode`
-
-Do not remove `--format=esm` while using `--bytecode` with the current Ink / yoga-layout stack.
