@@ -393,6 +393,7 @@ export const useTwmInput = ({ exit, controller }: UseTwmInputArgs) => {
     if (input === "r") {
       const current = state.items[state.selected];
       if (current?.kind === "worktree") {
+        refreshItems(`Refreshed ${current.name}`);
         refreshPreview(current.path);
       }
       return true;

@@ -1,10 +1,12 @@
 import path from "node:path";
 import { loadTmuxSessionNames, sessionNameFor } from "./session";
-import type { Item, SourceEntry } from "../types";
+import { loadOverwatchAgents, matchOverwatchAgent } from "./overwatch";
+import type { Item, OverwatchAgentState, SourceEntry } from "../types";
 
 const parseWorktreeItems = (
   repoRoot: string,
   sessionNames: Set<string>,
+  overwatchAgents: OverwatchAgentState[],
 ): Item[] => {
   const proc = Bun.spawnSync({
     cmd: ["git", "-C", repoRoot, "worktree", "list", "--porcelain"],
@@ -25,18 +27,43 @@ const parseWorktreeItems = (
     .filter((line) => line.startsWith("worktree "))
     .map((line) => line.slice("worktree ".length).trim())
     .filter(Boolean)
-    .map((itemPath) => ({
-      kind: "worktree" as const,
-      group: repoName,
-      path: itemPath,
-      name: path.basename(itemPath),
-      hasSession: sessionNames.has(sessionNameFor(itemPath)),
-    }))
+    .map((itemPath) => {
+      const sessionName = sessionNameFor(itemPath);
+
+      return {
+        kind: "worktree" as const,
+        group: repoName,
+        path: itemPath,
+        name: path.basename(itemPath),
+        hasSession: sessionNames.has(sessionName),
+        overwatch: matchOverwatchAgent(itemPath, sessionName, overwatchAgents),
+      };
+    })
     .filter((item) => item.name !== item.group);
+};
+
+export const annotateItemsWithLiveState = (items: Item[]): Item[] => {
+  const sessionNames = loadTmuxSessionNames();
+  const overwatchAgents = loadOverwatchAgents();
+
+  return items.map((item) => {
+    if (item.kind !== "worktree") {
+      return item;
+    }
+
+    const sessionName = sessionNameFor(item.path);
+
+    return {
+      ...item,
+      hasSession: sessionNames.has(sessionName),
+      overwatch: matchOverwatchAgent(item.path, sessionName, overwatchAgents),
+    };
+  });
 };
 
 export const loadItems = (sourceEntries: SourceEntry[]): Item[] => {
   const sessionNames = loadTmuxSessionNames();
+  const overwatchAgents = loadOverwatchAgents();
   const seen = new Set<string>();
 
   return sourceEntries.flatMap((source) => {
@@ -44,7 +71,11 @@ export const loadItems = (sourceEntries: SourceEntry[]): Item[] => {
       return [];
     }
 
-    const items = parseWorktreeItems(source.resolvedPath, sessionNames).filter(
+    const items = parseWorktreeItems(
+      source.resolvedPath,
+      sessionNames,
+      overwatchAgents,
+    ).filter(
       (item) => {
         if (seen.has(item.path)) {
           return false;

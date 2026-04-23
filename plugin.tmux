@@ -13,6 +13,8 @@ tmux set-option -gq @twm-popup-width "80%"
 tmux set-option -gq @twm-popup-height "80%"
 tmux set-option -gq @twm-version "latest"
 tmux set-option -gq @twm-install-mode "auto"
+tmux set-option -gq @twm-overwatch-enable "off"
+tmux set-option -gq @twm-overwatch-dir "~/.pi/overwatch"
 
 twm_key="$(tmux show-option -gqv @twm-key)"
 twm_popup_width="$(tmux show-option -gqv @twm-popup-width)"
