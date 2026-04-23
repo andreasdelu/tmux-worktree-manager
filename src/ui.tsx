@@ -1,5 +1,6 @@
 import React from "react";
 import { Box, Text } from "ink";
+import { overwatchEnabled } from "./config";
 import type { DialogState, Item, SourceEntry, ViewMode } from "./types";
 import { AddSourceOverlay } from "./components/AddSourceOverlay";
 import { ConfirmOverlay } from "./components/ConfirmOverlay";
@@ -9,6 +10,7 @@ import { RunningOverlay } from "./components/RunningOverlay";
 import { SidebarTabs } from "./components/SidebarTabs";
 import { SourceDetails } from "./components/SourceDetails";
 import { SourceSidebar } from "./components/SourceSidebar";
+import { PiDetails } from "./components/PiDetails";
 import { WorktreeDetails } from "./components/WorktreeDetails";
 import { WorktreeEmptyState } from "./components/WorktreeEmptyState";
 import { WorktreeSidebar } from "./components/WorktreeSidebar";
@@ -97,48 +99,77 @@ export const DetailsPane = ({
   hiddenPreviewChanges,
   formatPath,
   createTargetPath,
-}: DetailsPaneProps) => (
-  <Box
-    flexDirection="column"
-    width={isSplit ? "67%" : undefined}
-    flexGrow={1}
-    minHeight={isSplit ? mainPanelsHeight : undefined}
-    borderStyle="round"
-    borderColor="gray"
-    paddingX={1}
-  >
-    <Box marginBottom={1}>
-      <Text color="blue">
-        {view === "worktrees" ? "Details" : "Source details"}
-      </Text>
-    </Box>
-    {view === "worktrees" ? (
-      current ? (
-        current.kind === "source-empty" ? (
-          <WorktreeEmptyState
-            current={current}
-            createTargetPath={createTargetPath}
-            formatPath={formatPath}
-          />
+}: DetailsPaneProps) => {
+  const showPiPane =
+    overwatchEnabled && view === "worktrees" && current?.kind === "worktree";
+  const detailsHeight = showPiPane
+    ? Math.max(8, Math.floor(mainPanelsHeight * 0.65))
+    : mainPanelsHeight;
+  const piHeight = Math.max(6, mainPanelsHeight - detailsHeight);
+
+  return (
+    <Box
+      flexDirection="column"
+      width={isSplit ? "67%" : undefined}
+      flexGrow={1}
+      minHeight={isSplit ? mainPanelsHeight : undefined}
+    >
+      <Box
+        flexDirection="column"
+        minHeight={detailsHeight}
+        borderStyle="round"
+        borderColor="gray"
+        paddingX={1}
+      >
+        <Box marginBottom={1}>
+          <Text color="blue">
+            {view === "worktrees" ? "Details" : "Source details"}
+          </Text>
+        </Box>
+        {view === "worktrees" ? (
+          current ? (
+            current.kind === "source-empty" ? (
+              <WorktreeEmptyState
+                current={current}
+                createTargetPath={createTargetPath}
+                formatPath={formatPath}
+              />
+            ) : (
+              <WorktreeDetails
+                current={current}
+                previewPath={previewPath}
+                showPreviewLoading={showPreviewLoading}
+                loadingGlyph={loadingGlyph}
+                previewMetaRows={previewMetaRows}
+                previewChanges={previewChanges}
+                hiddenPreviewChanges={hiddenPreviewChanges}
+              />
+            )
+          ) : (
+            <Text>No worktrees found.</Text>
+          )
         ) : (
-          <WorktreeDetails
-            current={current}
-            previewPath={previewPath}
-            showPreviewLoading={showPreviewLoading}
-            loadingGlyph={loadingGlyph}
-            previewMetaRows={previewMetaRows}
-            previewChanges={previewChanges}
-            hiddenPreviewChanges={hiddenPreviewChanges}
-          />
-        )
-      ) : (
-        <Text>No worktrees found.</Text>
-      )
-    ) : (
-      <SourceDetails currentSource={currentSource} formatPath={formatPath} />
-    )}
-  </Box>
-);
+          <SourceDetails currentSource={currentSource} formatPath={formatPath} />
+        )}
+      </Box>
+
+      {showPiPane ? (
+        <Box
+          flexDirection="column"
+          minHeight={piHeight}
+          borderStyle="round"
+          borderColor="gray"
+          paddingX={1}
+        >
+          <Box marginBottom={1}>
+            <Text color="blue">Pi Overwatch</Text>
+          </Box>
+          {current ? <PiDetails current={current} loadingGlyph={loadingGlyph} /> : null}
+        </Box>
+      ) : null}
+    </Box>
+  );
+};
 
 type StatusLineProps = {
   message: string;

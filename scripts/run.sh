@@ -9,6 +9,8 @@ install_script="$repo_dir/scripts/install.sh"
 if [ -n "${TMUX:-}" ]; then
   export TWM_VERSION="$(tmux show-option -gqv @twm-version || true)"
   export TWM_INSTALL_MODE="$(tmux show-option -gqv @twm-install-mode || true)"
+  export TWM_OVERWATCH_ENABLE="$(tmux show-option -gqv @twm-overwatch-enable || true)"
+  export TWM_OVERWATCH_DIR="$(tmux show-option -gqv @twm-overwatch-dir || true)"
 fi
 
 : "${TWM_VERSION:=latest}"

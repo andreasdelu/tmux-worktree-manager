@@ -83,6 +83,7 @@ export const WorktreeDetails = ({
               <Text color="gray">No uncommitted changes</Text>
             )}
           </Box>
+
         </>
       )}
     </>

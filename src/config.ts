@@ -10,8 +10,36 @@ const xdgConfigHome =
 
 const configDir = path.join(xdgConfigHome, "twm");
 
+const expandHomePath = (value: string) => {
+  if (value === "~") {
+    return homeDir || value;
+  }
+
+  if (value.startsWith("~/")) {
+    return homeDir ? path.join(homeDir, value.slice(2)) : value;
+  }
+
+  return value;
+};
+
+const envBool = (value: string | undefined, fallback = false) => {
+  if (!value) {
+    return fallback;
+  }
+
+  return ["1", "true", "yes", "on"].includes(value.toLowerCase());
+};
+
 export const sourcesFile = path.join(configDir, "worktree-roots");
 export const layoutHookFile = path.join(configDir, "layout.sh");
+export const overwatchEnabled = envBool(process.env.TWM_OVERWATCH_ENABLE, false);
+export const overwatchDir = path.resolve(
+  expandHomePath(process.env.TWM_OVERWATCH_DIR || path.join(homeDir, ".pi", "overwatch")),
+);
+export const overwatchStaleMs = Number(
+  process.env.TWM_OVERWATCH_STALE_MS || process.env.PI_OVERWATCH_STALE_MS || 30_000,
+);
+export const overwatchRefreshMs = Number(process.env.TWM_OVERWATCH_REFRESH_MS || 3_000);
 
 export const sourcesFileHeader = `# One repo root per line.
 # Missing directories are ignored.

@@ -7,10 +7,15 @@ import {
   type Dispatch,
   type SetStateAction,
 } from "react";
-import { loadingFrames, previewDebounceMs } from "./config";
+import {
+  loadingFrames,
+  overwatchEnabled,
+  overwatchRefreshMs,
+  previewDebounceMs,
+} from "./config";
 import type { AppState, PreviewData, SourceEntry, ViewMode } from "./types";
 import { loadSources, formatPath } from "./lib/sources";
-import { loadItems } from "./lib/discovery";
+import { annotateItemsWithLiveState, loadItems } from "./lib/discovery";
 import { startPreviewLoad } from "./lib/preview";
 import { suggestedCreateTargetDir } from "./lib/actions";
 
@@ -26,6 +31,7 @@ export type TwmController = {
   state: AppState;
   setState: Dispatch<SetStateAction<AppState>>;
   refreshItems: (message?: string, sourceEntries?: SourceEntry[]) => void;
+  refreshLiveState: () => void;
   refreshPreview: (itemPath: string) => void;
   visible: { start: number; end: number; rows: AppState["items"] };
   currentSource?: SourceEntry;
@@ -84,6 +90,13 @@ export const useTwmController = (listRowsTarget: number): TwmController => {
     });
   }, []);
 
+  const refreshLiveState = useCallback(() => {
+    setState((current) => ({
+      ...current,
+      items: annotateItemsWithLiveState(current.items),
+    }));
+  }, []);
+
   const refreshPreview = useCallback((itemPath: string) => {
     previewCacheRef.current.delete(itemPath);
     setState((currentState) => ({
@@ -114,8 +127,21 @@ export const useTwmController = (listRowsTarget: number): TwmController => {
     refreshItems("", nextSources);
   }, []);
 
+  const hasWorkingOverwatch = useMemo(
+    () => state.items.some((item) => {
+      if (item.kind !== "worktree" || !item.overwatch) {
+        return false;
+      }
+
+      return item.overwatch.kind === "single"
+        ? item.overwatch.agent.status === "working"
+        : item.overwatch.agents.some((agent) => agent.status === "working");
+    }),
+    [state.items],
+  );
+
   useEffect(() => {
-    if (!(state.loading || state.previewLoading || state.dialog.kind === "running")) {
+    if (!(state.loading || state.previewLoading || state.dialog.kind === "running" || hasWorkingOverwatch)) {
       return;
     }
 
@@ -126,7 +152,21 @@ export const useTwmController = (listRowsTarget: number): TwmController => {
     return () => {
       clearInterval(interval);
     };
-  }, [state.loading, state.previewLoading, state.dialog.kind]);
+  }, [state.loading, state.previewLoading, state.dialog.kind, hasWorkingOverwatch]);
+
+  useEffect(() => {
+    if (!overwatchEnabled || view !== "worktrees" || state.dialog.kind !== "none") {
+      return;
+    }
+
+    const interval = setInterval(() => {
+      refreshLiveState();
+    }, overwatchRefreshMs);
+
+    return () => {
+      clearInterval(interval);
+    };
+  }, [view, state.dialog.kind, refreshLiveState]);
 
   useEffect(() => {
     if (view !== "worktrees") {
@@ -300,6 +340,7 @@ export const useTwmController = (listRowsTarget: number): TwmController => {
     state,
     setState,
     refreshItems,
+    refreshLiveState,
     refreshPreview,
     visible,
     currentSource,

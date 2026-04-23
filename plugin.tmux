@@ -8,11 +8,13 @@ current_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 # - set @twm-key to an empty string to disable the default binding
 # - install mode: auto | download | build
 
-tmux set-option -gq @twm-key "W"
-tmux set-option -gq @twm-popup-width "80%"
-tmux set-option -gq @twm-popup-height "80%"
-tmux set-option -gq @twm-version "latest"
-tmux set-option -gq @twm-install-mode "auto"
+tmux set-option -goq @twm-key "W"
+tmux set-option -goq @twm-popup-width "80%"
+tmux set-option -goq @twm-popup-height "80%"
+tmux set-option -goq @twm-version "latest"
+tmux set-option -goq @twm-install-mode "auto"
+tmux set-option -goq @twm-overwatch-enable "off"
+tmux set-option -goq @twm-overwatch-dir "~/.pi/overwatch"
 
 twm_key="$(tmux show-option -gqv @twm-key)"
 twm_popup_width="$(tmux show-option -gqv @twm-popup-width)"

@@ -1,11 +1,59 @@
 export type ItemKind = "worktree" | "source-empty";
 
+export type OverwatchStatus =
+  | "idle"
+  | "working"
+  | "done"
+  | "error"
+  | "offline"
+  | "stale";
+
+export type OverwatchAgentState = {
+  agentId: string;
+  cwd: string;
+  sessionName?: string;
+  status: OverwatchStatus;
+  phase: string;
+  toolName?: string;
+  summary?: string;
+  startedAt?: string;
+  finishedAt?: string;
+  updatedAt?: string;
+  lastHeartbeatAt?: string;
+  heartbeatAgeMs: number;
+  runtimeMs?: number;
+  queue: {
+    steering: number;
+    followUp: number;
+  };
+  tmux?: {
+    sessionName?: string;
+    windowIndex?: string;
+    paneIndex?: string;
+    paneId?: string;
+  };
+  identity: string;
+};
+
+export type OverwatchMatch =
+  | {
+      kind: "single";
+      matchedBy: "cwd" | "tmux";
+      agent: OverwatchAgentState;
+    }
+  | {
+      kind: "multi";
+      matchedBy: "cwd" | "tmux";
+      agents: OverwatchAgentState[];
+    };
+
 export type Item = {
   kind: ItemKind;
   group: string;
   path: string;
   name: string;
   hasSession: boolean;
+  overwatch?: OverwatchMatch;
 };
 
 export type ActionMode = "kill" | "remove";
