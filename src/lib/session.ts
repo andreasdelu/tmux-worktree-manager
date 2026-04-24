@@ -3,25 +3,37 @@ import path from "node:path";
 import { layoutHookFile } from "../config";
 import { runCommand, runCommandSync } from "./commands";
 
-export const sessionNameFor = (dir: string): string => {
-  const base = path.basename(dir);
-  const safeBase =
-    base.replace(/[ /.]/g, "-").replace(/[^A-Za-z0-9_-]/g, "") ||
-    "worktree";
+const safeSessionToken = (value: string, fallback: string) =>
+  value.replace(/[ /.]/g, "-").replace(/[^A-Za-z0-9_-]/g, "") || fallback;
+
+const shortChecksumFor = (value: string) => {
   const proc = Bun.spawnSync({
     cmd: [
       "bash",
       "-c",
       `printf '%s' "$1" | cksum | awk '{print $1}'`,
       "--",
-      dir,
+      value,
     ],
     stdout: "pipe",
     stderr: "pipe",
     env: process.env,
   });
-  const checksum = proc.stdout.toString().trim() || "0";
-  return `${safeBase}-${checksum}`;
+  const checksum = Number.parseInt(proc.stdout.toString().trim() || "0", 10);
+  return checksum.toString(16).padStart(4, "0").slice(-4);
+};
+
+export const sessionNameFor = (dir: string): string => {
+  const worktreeRoot = repoRootFor(dir);
+  const repoRoot = mainRepoRootFor(dir);
+  const safeRepo = safeSessionToken(path.basename(repoRoot), "repo");
+
+  if (path.resolve(worktreeRoot) === path.resolve(repoRoot)) {
+    return safeRepo;
+  }
+
+  const safeWorktree = safeSessionToken(path.basename(worktreeRoot), "worktree");
+  return `${safeRepo}__${safeWorktree}--${shortChecksumFor(worktreeRoot)}`;
 };
 
 export const loadTmuxSessionNames = (): Set<string> => {
@@ -60,6 +72,24 @@ const repoRootFor = (dir: string) => {
     "--show-toplevel",
   ]);
   return result.success ? result.stdout.trim() : dir;
+};
+
+const mainRepoRootFor = (dir: string) => {
+  const result = runCommandSync([
+    "git",
+    "-C",
+    dir,
+    "rev-parse",
+    "--git-common-dir",
+  ]);
+
+  if (!result.success) {
+    return repoRootFor(dir);
+  }
+
+  const raw = result.stdout.trim();
+  const resolved = path.isAbsolute(raw) ? raw : path.resolve(repoRootFor(dir), raw);
+  return path.dirname(path.resolve(resolved));
 };
 
 const branchFor = (dir: string) => {

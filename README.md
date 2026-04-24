@@ -65,6 +65,7 @@ Files created on first run:
 - shows the primary checkout and linked worktrees from your configured repo roots
 - opens the matching tmux session if it exists
 - creates a tmux session if it does not
+- uses repo-scoped tmux session names (`landfolk` for the primary checkout, `landfolk__checkout-flow--8f3a` for linked worktrees)
 - can create, close, refresh, and remove worktrees from the UI
 
 ## Keys
