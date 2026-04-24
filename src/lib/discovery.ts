@@ -1,4 +1,5 @@
 import path from "node:path";
+import { isPrimaryWorktree } from "./actions";
 import { loadTmuxSessionNames, sessionNameFor } from "./session";
 import { loadOverwatchAgents, matchOverwatchAgent } from "./overwatch";
 import type { Item, OverwatchAgentState, SourceEntry } from "../types";
@@ -35,11 +36,11 @@ const parseWorktreeItems = (
         group: repoName,
         path: itemPath,
         name: path.basename(itemPath),
+        isPrimary: isPrimaryWorktree(itemPath),
         hasSession: sessionNames.has(sessionName),
         overwatch: matchOverwatchAgent(itemPath, sessionName, overwatchAgents),
       };
-    })
-    .filter((item) => item.name !== item.group);
+    });
 };
 
 export const annotateItemsWithLiveState = (items: Item[]): Item[] => {
@@ -95,6 +96,7 @@ export const loadItems = (sourceEntries: SourceEntry[]): Item[] => {
         group: path.basename(source.resolvedPath),
         path: source.resolvedPath,
         name: "No linked worktrees yet",
+        isPrimary: false,
         hasSession: false,
       },
     ];

@@ -412,6 +412,18 @@ export const useTwmInput = ({ exit, controller }: UseTwmInputArgs) => {
     if (input === "x") {
       const current = state.items[state.selected];
       if (current?.kind === "worktree") {
+        if (current.isPrimary) {
+          setState((currentState) => ({
+            ...currentState,
+            dialog: {
+              kind: "notice",
+              title: "Can't remove the primary checkout",
+              message: "The main repo checkout is shown in the list, but twm won't remove it.",
+            },
+          }));
+          return true;
+        }
+
         void (async () => {
           const blockedReason = await removalBlockedReason(current.path);
           setState((currentState) => {

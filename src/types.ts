@@ -52,6 +52,7 @@ export type Item = {
   group: string;
   path: string;
   name: string;
+  isPrimary: boolean;
   hasSession: boolean;
   overwatch?: OverwatchMatch;
 };

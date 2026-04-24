@@ -34,6 +34,7 @@ export const WorktreeDetails = ({
         <Text bold color="cyan">
           {current.name}
         </Text>
+        {current.isPrimary ? <Text color="gray"> primary</Text> : null}
       </Box>
       {previewPath ? <Text color="gray">{previewPath}</Text> : null}
       <Text> </Text>

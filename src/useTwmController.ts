@@ -305,6 +305,9 @@ export const useTwmController = (listRowsTarget: number): TwmController => {
     ? formatPath(effectivePreview.path)
     : formatPath(current?.path ?? "");
   const previewMetaRows = [
+    current?.kind === "worktree" && current.isPrimary
+      ? { label: "Role", value: "primary checkout" }
+      : null,
     effectivePreview?.branch
       ? { label: "Branch", value: effectivePreview.branch }
       : null,

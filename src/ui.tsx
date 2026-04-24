@@ -221,7 +221,7 @@ export const HelpLine = ({ view, keybindLegendHeight, current }: HelpLineProps) 
           "r refresh",
           "c create worktree",
           current.hasSession ? "d close tmux" : null,
-          "x remove worktree",
+          current.isPrimary ? null : "x remove worktree",
           "q quit",
         ]
           .filter((part): part is string => part !== null)

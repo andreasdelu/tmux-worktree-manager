@@ -98,6 +98,9 @@ export const WorktreeSidebar = ({
                 >
                   {item.name}
                 </Text>
+                {item.kind === "worktree" && item.isPrimary ? (
+                  <Text color="gray"> primary</Text>
+                ) : null}
                 {item.hasSession ? (
                   <Text color={isSelected ? "cyan" : "gray"}> ●</Text>
                 ) : null}

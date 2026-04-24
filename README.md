@@ -62,8 +62,7 @@ Files created on first run:
 
 ## What it does
 
-- shows linked worktrees from your configured repo roots
-- hides the primary checkout
+- shows the primary checkout and linked worktrees from your configured repo roots
 - opens the matching tmux session if it exists
 - creates a tmux session if it does not
 - can create, close, refresh, and remove worktrees from the UI
@@ -77,6 +76,7 @@ Files created on first run:
 - `c` — create worktree
 - `d` — close tmux session
 - `x` — remove worktree
+  - blocked for the primary checkout
 - `r` — refresh
 - `tab` — switch to sources
 - `q` or `esc` — quit

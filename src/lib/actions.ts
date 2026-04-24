@@ -30,10 +30,10 @@ const gitPathForDirAsync = async (
   return path.resolve(resolved);
 };
 
-const isPrimaryWorktree = (dir: string) =>
+export const isPrimaryWorktree = (dir: string) =>
   gitPathForDir(dir, "--git-dir") === gitPathForDir(dir, "--git-common-dir");
 
-const isPrimaryWorktreeAsync = async (dir: string) =>
+export const isPrimaryWorktreeAsync = async (dir: string) =>
   (await gitPathForDirAsync(dir, "--git-dir")) ===
   (await gitPathForDirAsync(dir, "--git-common-dir"));
 
