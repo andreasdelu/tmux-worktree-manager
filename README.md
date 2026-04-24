@@ -183,6 +183,7 @@ set -g @twm-overwatch-dir '~/.pi/overwatch'
 - removing a dirty worktree is blocked
 - removing the current session's worktree is blocked
 - source paths must exist, be unique, and be Git repo roots
+- dialog inputs support paste
 
 ## Development
 

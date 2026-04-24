@@ -42,6 +42,13 @@ export const useTwmInput = ({ exit, controller }: UseTwmInputArgs) => {
     refreshPreview,
   } = controller;
 
+  const sanitizeSourceInput = (input: string) => input.replace(/[^ -~]/g, "");
+
+  const sanitizeBranchInput = (input: string) =>
+    Array.from(input)
+      .filter((char) => /^[A-Za-z0-9._/-]$/.test(char))
+      .join("");
+
   const cancelDialog = () => {
     setState((current) => ({
       ...current,
@@ -120,14 +127,15 @@ export const useTwmInput = ({ exit, controller }: UseTwmInputArgs) => {
       return true;
     }
 
-    if (/^[ -~]$/.test(input)) {
+    const sourceInput = sanitizeSourceInput(input);
+    if (sourceInput) {
       setState((current) =>
         current.dialog.kind === "add-source"
           ? {
               ...current,
               dialog: {
                 kind: "add-source",
-                value: `${current.dialog.value}${input}`,
+                value: `${current.dialog.value}${sourceInput}`,
               },
             }
           : current,
@@ -219,14 +227,15 @@ export const useTwmInput = ({ exit, controller }: UseTwmInputArgs) => {
       return true;
     }
 
-    if (/^[A-Za-z0-9._/-]$/.test(input)) {
+    const branchInput = sanitizeBranchInput(input);
+    if (branchInput) {
       setState((current) =>
         current.dialog.kind === "create"
           ? {
               ...current,
               dialog: {
                 kind: "create",
-                value: `${current.dialog.value}${input}`,
+                value: `${current.dialog.value}${branchInput}`,
               },
             }
           : current,
