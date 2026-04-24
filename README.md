@@ -11,6 +11,10 @@
 
 `twm` is a tmux popup for browsing Git worktrees and jumping into tmux sessions.
 
+<img width="49%" alt="Screenshot 2026-04-24 at 09 16 25" src="https://github.com/user-attachments/assets/859c1a37-09f9-40dd-a90f-bc70e6d9f599" />
+<img width="49%" alt="Screenshot 2026-04-24 at 09 16 32" src="https://github.com/user-attachments/assets/fc879b9b-4f20-4a0a-a5e1-a8400b0f3038" />
+
+
 ## Install
 
 Add the plugin to `.tmux.conf`:
@@ -88,6 +92,9 @@ Files created on first run:
 ## Pi Overwatch
 
 Optional.
+
+<img width="50%" alt="Screenshot 2026-04-24 at 09 16 04" src="https://github.com/user-attachments/assets/5b87dfd9-af0c-48ae-a6d7-cef8170f9d70" />
+
 
 Enable it in tmux:
 
