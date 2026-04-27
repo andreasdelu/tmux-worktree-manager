@@ -1,6 +1,6 @@
 {
   "name": "tmux-worktree-manager",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "private": true,
   "description": "A tmux-first Git worktree launcher and session bootstrapper.",
   "type": "module",
