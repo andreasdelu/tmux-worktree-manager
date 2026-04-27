@@ -54,14 +54,18 @@ set -euo pipefail
 # Starter layout hook for twm.
 #
 # This runs only when twm creates a brand-new tmux session.
-# The built-in default layout already created:
-#   - window 1: code   (two panes, main-vertical)
-#   - window 2: shell
+# The built-in default layout creates a single default tmux window in the worktree.
+# This file is where you take over from there.
 #
-# Edit this file however you like.
+# Edit or replace this however you like.
 
 session="\$TWM_SESSION_NAME"
 path="\$TWM_WORKTREE_PATH"
+
+# Rename the first window and split it into editor + shell.
+tmux rename-window -t "\$session:1" code
+tmux split-window -h -t "\$session:1" -c "\$path"
+tmux select-layout -t "\$session:1" main-vertical
 
 # Open the editor in the main pane.
 tmux send-keys -t "\$session:1.1" "cd '\$path' && nvim" C-m
@@ -69,12 +73,8 @@ tmux send-keys -t "\$session:1.1" "cd '\$path' && nvim" C-m
 # Keep the side pane as a plain shell in the repo.
 tmux send-keys -t "\$session:1.2" "cd '\$path'" C-m
 
-# Start the second window in the repo too.
-tmux send-keys -t "\$session:2" "cd '\$path'" C-m
-
-# Example: add a third window for tests.
-# tmux new-window -t "\$session:3" -n tests -c "\$path"
-# tmux send-keys -t "\$session:3" "cd '\$path' && bun test --watch" C-m
+# Add a second shell window.
+tmux new-window -t "\$session:2" -n shell -c "\$path"
 
 # Land back in the editor.
 tmux select-window -t "\$session:1"

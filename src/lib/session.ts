@@ -108,38 +108,9 @@ const applyDefaultLayout = (sessionName: string, dir: string) => {
     "-d",
     "-s",
     sessionName,
-    "-n",
-    "code",
     "-c",
     dir,
   ]);
-  runCommandSync([
-    "tmux",
-    "split-window",
-    "-h",
-    "-t",
-    `${sessionName}:1`,
-    "-c",
-    dir,
-  ]);
-  runCommandSync([
-    "tmux",
-    "select-layout",
-    "-t",
-    `${sessionName}:1`,
-    "main-vertical",
-  ]);
-  runCommandSync([
-    "tmux",
-    "new-window",
-    "-t",
-    `${sessionName}:2`,
-    "-n",
-    "shell",
-    "-c",
-    dir,
-  ]);
-  runCommandSync(["tmux", "select-window", "-t", `${sessionName}:1`]);
 };
 
 export const createSession = (sessionName: string, dir: string) => {

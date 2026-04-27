@@ -148,6 +148,8 @@ parent ~/.dotfiles
 
 Run when `twm` creates a new tmux session.
 
+`twm` starts that session as a single default tmux window in the worktree. The generated `layout.sh` is a starter example you can edit or replace if you want to split panes, rename windows, open an editor, or add more windows.
+
 Environment variables:
 
 - `TWM_SESSION_NAME`
