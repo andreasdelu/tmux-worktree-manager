@@ -2,6 +2,7 @@ import React from "react";
 import { Box, Text } from "ink";
 import { overwatchEnabled } from "./config";
 import { theme } from "./theme";
+import { currentVersion } from "./version";
 import type { DialogState, Item, SourceEntry, ViewMode } from "./types";
 import { AddSourceOverlay } from "./components/AddSourceOverlay";
 import { ConfirmOverlay } from "./components/ConfirmOverlay";
@@ -158,7 +159,10 @@ export const DetailsPane = ({
             <Text>No worktrees found.</Text>
           )
         ) : (
-          <SourceDetails currentSource={currentSource} formatPath={formatPath} />
+          <SourceDetails
+            currentSource={currentSource}
+            formatPath={formatPath}
+          />
         )}
       </Box>
 
@@ -174,7 +178,9 @@ export const DetailsPane = ({
           <Box marginBottom={1}>
             <Text color={theme.colors.primary}>Pi Overwatch</Text>
           </Box>
-          {current ? <PiDetails current={current} loadingGlyph={loadingGlyph} /> : null}
+          {current ? (
+            <PiDetails current={current} loadingGlyph={loadingGlyph} />
+          ) : null}
         </Box>
       ) : null}
     </Box>
@@ -186,6 +192,7 @@ type StatusLineProps = {
   dialog: DialogState;
   view: ViewMode;
   statusBoxHeight: number;
+  updateAvailableVersion: string | null;
 };
 
 export const StatusLine = ({
@@ -193,32 +200,61 @@ export const StatusLine = ({
   dialog,
   view,
   statusBoxHeight,
-}: StatusLineProps) => (
-  <Box
-    minHeight={statusBoxHeight}
-    borderStyle="round"
-    borderColor={theme.colors.border}
-    paddingX={1}
-  >
-    <Text
-      color={
-        message || dialog.kind === "running"
-          ? theme.colors.accent
-          : theme.colors.muted
-      }
+  updateAvailableVersion,
+}: StatusLineProps) => {
+  const baseStatus = message
+    ? message
+    : dialog.kind === "running"
+      ? dialog.label || "Working…"
+      : dialog.kind !== "none"
+        ? "Dialog open. Press esc to cancel."
+        : view === "worktrees"
+          ? "Ready."
+          : "Sources mode.";
+  return (
+    <Box
+      width="100%"
+      minHeight={statusBoxHeight}
+      overflow="hidden"
+      borderStyle="round"
+      borderColor={theme.colors.border}
+      paddingX={1}
+      justifyContent="space-between"
     >
-      {message
-        ? message
-        : dialog.kind === "running"
-          ? dialog.label || "Working…"
-          : dialog.kind !== "none"
-            ? "Dialog open. Press esc to cancel."
-            : view === "worktrees"
-              ? "Ready."
-              : "Sources mode."}
-    </Text>
-  </Box>
-);
+      <Box flexGrow={1} flexShrink={1} minWidth={0}>
+        <Text
+          color={
+            message || dialog.kind === "running"
+              ? theme.colors.accent
+              : theme.colors.muted
+          }
+          wrap="truncate-end"
+        >
+          {baseStatus}
+        </Text>
+      </Box>
+      <Box
+        marginLeft={1}
+        flexShrink={1}
+        minWidth={0}
+        height={1}
+        overflow="hidden"
+      >
+        <Text color={theme.colors.muted} wrap="truncate-end">
+          twm v{currentVersion}
+        </Text>
+        {updateAvailableVersion ? (
+          <>
+            <Text color={theme.colors.muted} wrap="truncate-end">{` | `}</Text>
+            <Text color={theme.colors.accent} wrap="truncate-end">
+              {`v${updateAvailableVersion} available!`}
+            </Text>
+          </>
+        ) : null}
+      </Box>
+    </Box>
+  );
+};
 
 type HelpLineProps = {
   view: ViewMode;
@@ -226,23 +262,28 @@ type HelpLineProps = {
   current?: Item;
 };
 
-export const HelpLine = ({ view, keybindLegendHeight, current }: HelpLineProps) => {
-  const worktreeLegend = current?.kind === "source-empty"
-    ? "tab sources • j/k move • c create first worktree • q quit"
-    : current?.kind === "worktree"
-      ? [
-          "tab sources",
-          "j/k move",
-          "enter open",
-          "r refresh",
-          "c create worktree",
-          current.hasSession ? "d close tmux" : null,
-          current.isPrimary ? null : "x remove worktree",
-          "q quit",
-        ]
-          .filter((part): part is string => part !== null)
-          .join(" • ")
-      : "tab sources • j/k move • q quit";
+export const HelpLine = ({
+  view,
+  keybindLegendHeight,
+  current,
+}: HelpLineProps) => {
+  const worktreeLegend =
+    current?.kind === "source-empty"
+      ? "tab sources • j/k move • c create first worktree • q quit"
+      : current?.kind === "worktree"
+        ? [
+            "tab sources",
+            "j/k move",
+            "enter open",
+            "r refresh",
+            "c create worktree",
+            current.hasSession ? "d close tmux" : null,
+            current.isPrimary ? null : "x remove worktree",
+            "q quit",
+          ]
+            .filter((part): part is string => part !== null)
+            .join(" • ")
+        : "tab sources • j/k move • q quit";
 
   return (
     <Box paddingX={1} flexDirection="column" minHeight={keybindLegendHeight}>

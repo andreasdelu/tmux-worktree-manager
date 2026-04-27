@@ -88,6 +88,7 @@ const App = () => {
         dialog={controller.state.dialog}
         view={controller.view}
         statusBoxHeight={statusBoxHeight}
+        updateAvailableVersion={controller.updateAvailableVersion}
       />
 
       <HelpLine

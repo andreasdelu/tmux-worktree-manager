@@ -8,7 +8,7 @@ const xdgConfigHome =
     ? path.join(homeDir, ".config")
     : path.join(process.cwd(), ".config"));
 
-const configDir = path.join(xdgConfigHome, "twm");
+export const configDir = path.join(xdgConfigHome, "twm");
 
 const expandHomePath = (value: string) => {
   if (value === "~") {
@@ -32,6 +32,7 @@ const envBool = (value: string | undefined, fallback = false) => {
 
 export const sourcesFile = path.join(configDir, "worktree-roots");
 export const layoutHookFile = path.join(configDir, "layout.sh");
+export const updateCheckFile = path.join(configDir, "update-check.json");
 export const overwatchEnabled = envBool(process.env.TWM_OVERWATCH_ENABLE, false);
 export const overwatchDir = path.resolve(
   expandHomePath(process.env.TWM_OVERWATCH_DIR || path.join(homeDir, ".pi", "overwatch")),

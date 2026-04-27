@@ -18,6 +18,7 @@ import { loadSources, formatPath } from "./lib/sources";
 import { annotateItemsWithLiveState, loadItems } from "./lib/discovery";
 import { startPreviewLoad } from "./lib/preview";
 import { suggestedCreateTargetDir } from "./lib/actions";
+import { checkForUpdate } from "./lib/update";
 
 export type PreviewMetaRow = { label: string; value: string };
 
@@ -43,6 +44,7 @@ export type TwmController = {
   previewMetaRows: PreviewMetaRow[];
   previewChanges: string[];
   hiddenPreviewChanges: number;
+  updateAvailableVersion: string | null;
 };
 
 export const useTwmController = (listRowsTarget: number): TwmController => {
@@ -63,10 +65,29 @@ export const useTwmController = (listRowsTarget: number): TwmController => {
     loading: true,
   });
   const [loadingFrame, setLoadingFrame] = useState(0);
+  const [updateAvailableVersion, setUpdateAvailableVersion] = useState<
+    string | null
+  >(null);
 
   useEffect(() => {
     sourcesRef.current = sources;
   }, [sources]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    void (async () => {
+      const latestVersion = await checkForUpdate();
+
+      if (!cancelled) {
+        setUpdateAvailableVersion(latestVersion);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const refreshItems = useCallback((message = "", sourceEntries = sourcesRef.current) => {
     const items = loadItems(sourceEntries);
@@ -399,5 +420,6 @@ export const useTwmController = (listRowsTarget: number): TwmController => {
     previewMetaRows,
     previewChanges,
     hiddenPreviewChanges,
+    updateAvailableVersion,
   };
 };

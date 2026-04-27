@@ -67,6 +67,8 @@ Files created on first run:
 - creates a tmux session if it does not
 - uses repo-scoped tmux session names (`landfolk` for the primary checkout, `landfolk__checkout-flow--8f3a` for linked worktrees)
 - can create, close, refresh, and remove worktrees from the UI
+- shows the current `twm` version in the status line
+- checks GitHub tags once per day and appends a passive update hint when a newer version is available
 
 ## Keys
 
@@ -186,6 +188,7 @@ set -g @twm-overwatch-dir '~/.pi/overwatch'
 - removing the current session's worktree is blocked
 - source paths must exist, be unique, and be Git repo roots
 - dialog inputs support paste
+- update checks are cached in `${XDG_CONFIG_HOME:-$HOME/.config}/twm/update-check.json`
 
 ## Development
 
