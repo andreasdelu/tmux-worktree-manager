@@ -1,6 +1,7 @@
 import React from "react";
 import { Box, Text } from "ink";
 import { sortOverwatchAgents } from "../lib/overwatch";
+import { theme } from "../theme";
 import type { Item, OverwatchAgentState } from "../types";
 
 const statusLabel = (status: string, loadingGlyph: string) => {
@@ -24,15 +25,15 @@ const statusLabel = (status: string, loadingGlyph: string) => {
 const statusColor = (status: string) => {
   switch (status) {
     case "working":
-      return "cyan";
+      return theme.colors.accent;
     case "done":
-      return "green";
+      return theme.colors.success;
     case "stale":
-      return "yellow";
+      return theme.colors.warning;
     case "error":
-      return "red";
+      return theme.colors.danger;
     default:
-      return "gray";
+      return theme.colors.muted;
   }
 };
 
@@ -78,18 +79,16 @@ const summaryLabel = (summary?: string, workLabel?: string) => {
     return "—";
   }
 
-  return summary.length > 40 ? `${summary.slice(0, 37)}...` : summary;
+  return summary;
 };
 
-const rowColor = (status: string) => (status === "offline" ? "gray" : undefined);
+const rowColor = (status: string) =>
+  status === "offline" ? theme.colors.muted : undefined;
 
-const STATE_WIDTH = 7;
-const TARGET_WIDTH = 24;
-const WHERE_WIDTH = 10;
-const DOING_WIDTH = 14;
-const SUMMARY_WIDTH = 40;
-const TABLE_WIDTH =
-  STATE_WIDTH + TARGET_WIDTH + WHERE_WIDTH + DOING_WIDTH + SUMMARY_WIDTH + 8;
+const STATE_WIDTH = 1;
+const TARGET_WIDTH = 14;
+const WHERE_WIDTH = 9;
+const DOING_WIDTH = 10;
 
 const fit = (value: string, width: number) => {
   if (width <= 0) {
@@ -115,6 +114,21 @@ const whereLabel = (instance: OverwatchAgentState) => {
   return "cwd";
 };
 
+const tableLine = (
+  state: string,
+  target: string,
+  where: string,
+  doing: string,
+  summary: string,
+) => `${fit(state, STATE_WIDTH)} ${detailsLine(target, where, doing, summary)}`;
+
+const detailsLine = (
+  target: string,
+  where: string,
+  doing: string,
+  summary: string,
+) => `${fit(target, TARGET_WIDTH)} ${fit(where, WHERE_WIDTH)} ${fit(doing, DOING_WIDTH)} ${summary}`;
+
 const doingLabel = (status: string, phase?: string, toolName?: string) => {
   if (status === "offline") {
     return "offline";
@@ -135,11 +149,11 @@ export const PiDetails = ({
   loadingGlyph: string;
 }) => {
   if (current.kind !== "worktree") {
-    return <Text color="gray">No Pi activity for this worktree.</Text>;
+    return <Text color={theme.colors.muted}>No Pi activity for this worktree.</Text>;
   }
 
   if (!current.overwatch) {
-    return <Text color="gray">No Pi activity for this worktree.</Text>;
+    return <Text color={theme.colors.muted}>No Pi activity for this worktree.</Text>;
   }
 
   const instances = current.overwatch.kind === "single"
@@ -147,25 +161,15 @@ export const PiDetails = ({
     : sortOverwatchAgents(current.overwatch.agents);
 
   return (
-    <Box flexDirection="column">
-      <Box marginBottom={1}>
-        <Box width={STATE_WIDTH + 1}>
-          <Text color="gray">{fit("STATE", STATE_WIDTH)}</Text>
-        </Box>
-        <Box width={TARGET_WIDTH + 1}>
-          <Text color="gray">{fit("TARGET", TARGET_WIDTH)}</Text>
-        </Box>
-        <Box width={WHERE_WIDTH + 1}>
-          <Text color="gray">{fit("WHERE", WHERE_WIDTH)}</Text>
-        </Box>
-        <Box width={DOING_WIDTH + 1}>
-          <Text color="gray">{fit("DOING", DOING_WIDTH)}</Text>
-        </Box>
-        <Box flexGrow={1}>
-          <Text color="gray">SUMMARY</Text>
-        </Box>
+    <Box flexDirection="column" overflow="hidden">
+      <Box height={1} overflow="hidden">
+        <Text color={theme.colors.muted} wrap="truncate-end">
+          {tableLine("S", "TARGET", "WHERE", "DOING", "SUMMARY")}
+        </Text>
       </Box>
-      <Text color="gray">{"─".repeat(TABLE_WIDTH)}</Text>
+      <Box height={1} overflow="hidden">
+        <Text color={theme.colors.muted} wrap="truncate-end">{"─".repeat(200)}</Text>
+      </Box>
       {instances.map((instance) => {
         const workLabel = currentWorkLabel(
           instance.status,
@@ -176,25 +180,19 @@ export const PiDetails = ({
         const summary = summaryLabel(instance.summary, workLabel);
 
         return (
-          <Box key={`${current.path}:pi:${instance.agentId}`}>
-            <Box width={STATE_WIDTH + 1}>
-              <Text color={statusColor(instance.status)}>
-                {fit(statusLabel(instance.status, loadingGlyph), STATE_WIDTH)}
+          <Box key={`${current.path}:pi:${instance.agentId}`} height={1} overflow="hidden">
+            <Text color={statusColor(instance.status)}>
+              {fit(statusLabel(instance.status, loadingGlyph), STATE_WIDTH)}{" "}
+            </Text>
+            <Box flexShrink={1} minWidth={0} overflow="hidden">
+              <Text color={rowColor(instance.status)} wrap="truncate-end">
+                {detailsLine(
+                  instance.identity,
+                  whereLabel(instance),
+                  doingLabel(instance.status, instance.phase, instance.toolName),
+                  summary,
+                )}
               </Text>
-            </Box>
-            <Box width={TARGET_WIDTH + 1}>
-              <Text color={rowColor(instance.status)}>{fit(instance.identity, TARGET_WIDTH)}</Text>
-            </Box>
-            <Box width={WHERE_WIDTH + 1}>
-              <Text color={rowColor(instance.status)}>{fit(whereLabel(instance), WHERE_WIDTH)}</Text>
-            </Box>
-            <Box width={DOING_WIDTH + 1}>
-              <Text color={rowColor(instance.status)}>
-                {fit(doingLabel(instance.status, instance.phase, instance.toolName), DOING_WIDTH)}
-              </Text>
-            </Box>
-            <Box flexGrow={1}>
-              <Text color={rowColor(instance.status)}>{fit(summary, SUMMARY_WIDTH)}</Text>
             </Box>
           </Box>
         );
