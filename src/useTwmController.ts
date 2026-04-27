@@ -256,14 +256,58 @@ export const useTwmController = (listRowsTarget: number): TwmController => {
   }, [view, state.items, state.selected, previewReloadNonce]);
 
   const visible = useMemo(() => {
-    const start = Math.max(
-      0,
-      Math.min(
-        state.selected - Math.floor(listRowsTarget / 2),
-        Math.max(state.items.length - listRowsTarget, 0),
-      ),
-    );
-    const end = Math.min(state.items.length, start + listRowsTarget);
+    if (state.items.length === 0) {
+      return { start: 0, end: 0, rows: [] };
+    }
+
+    const selected = Math.min(state.selected, state.items.length - 1);
+    const sliceHeight = (start: number, end: number) => {
+      let height = 0;
+      let lastGroup = "";
+
+      for (let index = start; index < end; index++) {
+        const item = state.items[index];
+        const showGroup = item.group !== lastGroup;
+
+        if (showGroup) {
+          if (index !== start) {
+            height += 1;
+          }
+
+          height += 1;
+          lastGroup = item.group;
+        }
+
+        height += 1;
+      }
+
+      return height;
+    };
+
+    let start = selected;
+    let end = selected + 1;
+
+    while (start > 0 || end < state.items.length) {
+      const previousStart = start - 1;
+      const nextEnd = end + 1;
+      const canAddPrevious =
+        start > 0 && sliceHeight(previousStart, end) <= listRowsTarget;
+      const canAddNext =
+        end < state.items.length && sliceHeight(start, nextEnd) <= listRowsTarget;
+
+      if (!canAddPrevious && !canAddNext) {
+        break;
+      }
+
+      const linesBefore = selected - start;
+      const linesAfter = end - selected - 1;
+
+      if (canAddPrevious && (!canAddNext || linesBefore <= linesAfter)) {
+        start = previousStart;
+      } else {
+        end = nextEnd;
+      }
+    }
 
     return {
       start,

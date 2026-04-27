@@ -1,8 +1,12 @@
 import React from "react";
 import { Box, Text } from "ink";
+import { theme } from "../theme";
 import type { Item, OverwatchMatch } from "../types";
 
-const badgeForOverwatch = (match: OverwatchMatch | undefined, loadingGlyph: string) => {
+const badgeForOverwatch = (
+  match: OverwatchMatch | undefined,
+  loadingGlyph: string,
+) => {
   if (!match) {
     return null;
   }
@@ -15,14 +19,18 @@ const badgeForOverwatch = (match: OverwatchMatch | undefined, loadingGlyph: stri
   }
 
   if (onlineAgents.some((agent) => agent.status === "working")) {
-    return { prefix: " π", suffix: loadingGlyph, color: "cyan" } as const;
+    return {
+      prefix: " π",
+      suffix: loadingGlyph,
+      color: theme.colors.accent,
+    } as const;
   }
 
   if (onlineAgents.every((agent) => agent.status === "done")) {
-    return { prefix: " π", suffix: "✓", color: "green" } as const;
+    return { prefix: " π", suffix: "✓", color: theme.colors.success } as const;
   }
 
-  return { prefix: " π", suffix: "", color: "gray" } as const;
+  return { prefix: " π", suffix: "", color: theme.colors.muted } as const;
 };
 
 type WorktreeSidebarProps = {
@@ -43,8 +51,10 @@ export const WorktreeSidebar = ({
   if (loading) {
     return (
       <>
-        <Text color="cyan">{loadingGlyph} Loading worktrees…</Text>
-        <Text color="gray">
+        <Text color={theme.colors.accent}>
+          {loadingGlyph} Loading worktrees…
+        </Text>
+        <Text color={theme.colors.muted}>
           Scanning configured repositories and linked worktrees.
         </Text>
       </>
@@ -70,8 +80,8 @@ export const WorktreeSidebar = ({
             marginTop={showGroup && absoluteIndex !== 0 ? 1 : 0}
           >
             {showGroup ? (
-              <Box>
-                <Text bold color="gray">
+              <Box height={1} overflow="hidden">
+                <Text bold color={theme.colors.muted} wrap="truncate-end">
                   {item.group}
                 </Text>
               </Box>
@@ -79,30 +89,44 @@ export const WorktreeSidebar = ({
             <Box
               paddingLeft={1}
               paddingRight={1}
-              backgroundColor={isSelected ? "#12363a" : undefined}
+              height={1}
+              overflow="hidden"
+              backgroundColor={isSelected ? theme.colors.selected : undefined}
               justifyContent="space-between"
             >
-              <Box>
-                <Text color={isSelected ? "cyan" : "gray"}>
+              <Box flexShrink={1} minWidth={0}>
+                <Text
+                  color={isSelected ? theme.colors.accent : theme.colors.muted}
+                >
                   {isSelected ? "› " : "  "}
                 </Text>
-                <Text
-                  bold={item.kind === "worktree"}
-                  color={
-                    isSelected
-                      ? "white"
-                      : item.kind === "source-empty"
-                        ? "gray"
-                        : undefined
-                  }
-                >
-                  {item.name}
-                </Text>
+                <Box flexShrink={1} minWidth={0}>
+                  <Text
+                    bold={item.kind === "worktree"}
+                    color={
+                      isSelected
+                        ? theme.colors.text
+                        : item.kind === "source-empty"
+                          ? theme.colors.muted
+                          : undefined
+                    }
+                    wrap="truncate-end"
+                  >
+                    {item.name}
+                  </Text>
+                </Box>
                 {item.kind === "worktree" && item.isPrimary ? (
-                  <Text color="gray"> primary</Text>
+                  <Text color={theme.colors.muted}> primary</Text>
                 ) : null}
                 {item.hasSession ? (
-                  <Text color={isSelected ? "cyan" : "gray"}> ●</Text>
+                  <Text
+                    color={
+                      isSelected ? theme.colors.accent : theme.colors.muted
+                    }
+                  >
+                    {" "}
+                    ●
+                  </Text>
                 ) : null}
               </Box>
               {overwatchBadge ? (

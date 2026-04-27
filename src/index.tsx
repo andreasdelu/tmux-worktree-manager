@@ -27,12 +27,16 @@ const App = () => {
     rootHeight - statusBoxHeight - keybindLegendHeight - 2,
     10,
   );
-  const listRowsTarget = Math.max(
-    6,
-    isSplit ? mainPanelsHeight - 4 : Math.floor(mainPanelsHeight / 2),
-  );
+  const stackedPaneGap = 0;
+  const sidebarPaneHeight = isSplit
+    ? mainPanelsHeight
+    : Math.max(7, Math.floor(mainPanelsHeight * 0.55));
+  const detailsPaneHeight = isSplit
+    ? mainPanelsHeight
+    : Math.max(6, mainPanelsHeight - sidebarPaneHeight - stackedPaneGap);
+  const sidebarRowsTarget = Math.max(3, sidebarPaneHeight - 4);
 
-  const controller = useTwmController(listRowsTarget);
+  const controller = useTwmController(sidebarRowsTarget);
 
   useTwmInput({ exit, controller });
 
@@ -45,8 +49,9 @@ const App = () => {
     >
       <Box
         flexDirection={isSplit ? "row" : "column"}
-        gap={1}
-        minHeight={mainPanelsHeight}
+        gap={isSplit ? 1 : 0}
+        height={mainPanelsHeight}
+        overflow="hidden"
       >
         <SidebarPane
           view={controller.view}
@@ -58,14 +63,15 @@ const App = () => {
           sources={controller.sources}
           selectedSource={controller.selectedSource}
           isSplit={isSplit}
-          mainPanelsHeight={mainPanelsHeight}
+          mainPanelsHeight={sidebarPaneHeight}
+          sourceRowsTarget={sidebarRowsTarget}
         />
         <DetailsPane
           view={controller.view}
           current={controller.current}
           currentSource={controller.currentSource}
           isSplit={isSplit}
-          mainPanelsHeight={mainPanelsHeight}
+          mainPanelsHeight={detailsPaneHeight}
           previewPath={controller.previewPath}
           showPreviewLoading={controller.showPreviewLoading}
           loadingGlyph={controller.loadingGlyph}

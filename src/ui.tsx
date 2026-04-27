@@ -1,6 +1,7 @@
 import React from "react";
 import { Box, Text } from "ink";
 import { overwatchEnabled } from "./config";
+import { theme } from "./theme";
 import type { DialogState, Item, SourceEntry, ViewMode } from "./types";
 import { AddSourceOverlay } from "./components/AddSourceOverlay";
 import { ConfirmOverlay } from "./components/ConfirmOverlay";
@@ -28,6 +29,7 @@ type SidebarPaneProps = {
   selectedSource: number;
   isSplit: boolean;
   mainPanelsHeight: number;
+  sourceRowsTarget: number;
 };
 
 export const SidebarPane = ({
@@ -41,14 +43,16 @@ export const SidebarPane = ({
   selectedSource,
   isSplit,
   mainPanelsHeight,
+  sourceRowsTarget,
 }: SidebarPaneProps) => (
   <Box
     flexDirection="column"
     width={isSplit ? "33%" : undefined}
     flexGrow={isSplit ? 0 : 1}
-    minHeight={isSplit ? mainPanelsHeight : undefined}
+    height={mainPanelsHeight}
+    overflow="hidden"
     borderStyle="round"
-    borderColor="gray"
+    borderColor={theme.colors.border}
     paddingX={1}
   >
     <SidebarTabs view={view} />
@@ -64,6 +68,7 @@ export const SidebarPane = ({
       <SourceSidebar
         sources={sources}
         selectedSource={selectedSource}
+        maxRows={sourceRowsTarget}
       />
     )}
   </Box>
@@ -102,27 +107,31 @@ export const DetailsPane = ({
 }: DetailsPaneProps) => {
   const showPiPane =
     overwatchEnabled && view === "worktrees" && current?.kind === "worktree";
+  const piHeight = showPiPane
+    ? Math.max(4, Math.floor(mainPanelsHeight * 0.35))
+    : 0;
   const detailsHeight = showPiPane
-    ? Math.max(8, Math.floor(mainPanelsHeight * 0.65))
+    ? Math.max(3, mainPanelsHeight - piHeight)
     : mainPanelsHeight;
-  const piHeight = Math.max(6, mainPanelsHeight - detailsHeight);
 
   return (
     <Box
       flexDirection="column"
       width={isSplit ? "67%" : undefined}
       flexGrow={1}
-      minHeight={isSplit ? mainPanelsHeight : undefined}
+      height={mainPanelsHeight}
+      overflow="hidden"
     >
       <Box
         flexDirection="column"
-        minHeight={detailsHeight}
+        height={detailsHeight}
+        overflow="hidden"
         borderStyle="round"
-        borderColor="gray"
+        borderColor={theme.colors.border}
         paddingX={1}
       >
         <Box marginBottom={1}>
-          <Text color="blue">
+          <Text color={theme.colors.primary}>
             {view === "worktrees" ? "Details" : "Source details"}
           </Text>
         </Box>
@@ -156,13 +165,14 @@ export const DetailsPane = ({
       {showPiPane ? (
         <Box
           flexDirection="column"
-          minHeight={piHeight}
+          height={piHeight}
+          overflow="hidden"
           borderStyle="round"
-          borderColor="gray"
+          borderColor={theme.colors.border}
           paddingX={1}
         >
           <Box marginBottom={1}>
-            <Text color="blue">Pi Overwatch</Text>
+            <Text color={theme.colors.primary}>Pi Overwatch</Text>
           </Box>
           {current ? <PiDetails current={current} loadingGlyph={loadingGlyph} /> : null}
         </Box>
@@ -187,10 +197,16 @@ export const StatusLine = ({
   <Box
     minHeight={statusBoxHeight}
     borderStyle="round"
-    borderColor="gray"
+    borderColor={theme.colors.border}
     paddingX={1}
   >
-    <Text color={message || dialog.kind === "running" ? "cyan" : "gray"}>
+    <Text
+      color={
+        message || dialog.kind === "running"
+          ? theme.colors.accent
+          : theme.colors.muted
+      }
+    >
       {message
         ? message
         : dialog.kind === "running"
@@ -230,7 +246,7 @@ export const HelpLine = ({ view, keybindLegendHeight, current }: HelpLineProps) 
 
   return (
     <Box paddingX={1} flexDirection="column" minHeight={keybindLegendHeight}>
-      <Text color="cyanBright">
+      <Text color={theme.colors.secondary}>
         {view === "worktrees"
           ? worktreeLegend
           : "tab worktrees • j/k move • a add source • x remove source • q quit"}
