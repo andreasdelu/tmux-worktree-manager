@@ -1,4 +1,5 @@
 import React from "react";
+import { theme } from "../theme";
 import { DialogFrame } from "./DialogFrame";
 
 type ConfirmOverlayProps = {
@@ -25,7 +26,7 @@ export const ConfirmOverlay = ({
     <DialogFrame
       rootHeight={rootHeight}
       isSplit={isSplit}
-      borderColor="yellow"
+      borderColor={theme.colors.warning}
       title={title}
       subtitle={subtitle}
       footer="y confirm • n cancel • esc close"

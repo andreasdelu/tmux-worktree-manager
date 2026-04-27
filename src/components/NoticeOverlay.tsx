@@ -1,4 +1,5 @@
 import React from "react";
+import { theme } from "../theme";
 import { DialogFrame } from "./DialogFrame";
 
 type NoticeOverlayProps = {
@@ -17,7 +18,7 @@ export const NoticeOverlay = ({
   <DialogFrame
     rootHeight={rootHeight}
     isSplit={isSplit}
-    borderColor="yellow"
+    borderColor={theme.colors.warning}
     title={title}
     subtitle={message}
     footer="enter ok • esc close"

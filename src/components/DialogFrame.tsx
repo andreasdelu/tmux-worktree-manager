@@ -1,5 +1,6 @@
 import React from "react";
 import { Box, Text } from "ink";
+import { theme } from "../theme";
 
 type DialogFrameProps = {
   rootHeight: number;
@@ -18,9 +19,9 @@ export const DialogFrame = ({
   isSplit,
   borderColor,
   title,
-  titleColor = "white",
+  titleColor = theme.colors.text,
   subtitle,
-  subtitleColor = "white",
+  subtitleColor = theme.colors.text,
   footer,
   children,
 }: DialogFrameProps) => (
@@ -32,9 +33,14 @@ export const DialogFrame = ({
     justifyContent="center"
   >
     <Box
-      width={isSplit ? 75 : undefined}
+      width={isSplit ? 75 : "100%"}
       borderStyle="round"
       borderColor={borderColor}
+      backgroundColor={theme.colors.surface}
+      borderTopBackgroundColor={theme.colors.surface}
+      borderBottomBackgroundColor={theme.colors.surface}
+      borderLeftBackgroundColor={theme.colors.surface}
+      borderRightBackgroundColor={theme.colors.surface}
       paddingX={2}
       paddingY={1}
       flexDirection="column"
@@ -50,7 +56,7 @@ export const DialogFrame = ({
       {children}
       {footer ? (
         <Box marginTop={1}>
-          <Text color="gray">{footer}</Text>
+          <Text color={theme.colors.muted}>{footer}</Text>
         </Box>
       ) : null}
     </Box>

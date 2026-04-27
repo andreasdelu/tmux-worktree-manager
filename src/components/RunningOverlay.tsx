@@ -1,4 +1,5 @@
 import React from "react";
+import { theme } from "../theme";
 import { DialogFrame } from "./DialogFrame";
 
 type RunningOverlayProps = {
@@ -17,9 +18,9 @@ export const RunningOverlay = ({
   <DialogFrame
     rootHeight={rootHeight}
     isSplit={isSplit}
-    borderColor="cyan"
+    borderColor={theme.colors.accent}
     title={`${loadingGlyph} ${label || "Working…"}`}
-    titleColor="cyan"
+    titleColor={theme.colors.accent}
     subtitle="Please wait while the action completes."
   />
 );

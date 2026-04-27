@@ -1,4 +1,5 @@
 import React from "react";
+import { theme } from "../theme";
 import { AddSourceDialog } from "./AddSourceDialog";
 import { DialogFrame } from "./DialogFrame";
 
@@ -16,7 +17,7 @@ export const AddSourceOverlay = ({
   <DialogFrame
     rootHeight={rootHeight}
     isSplit={isSplit}
-    borderColor="gray"
+    borderColor={theme.colors.border}
     title="Add repo root"
     subtitle="Add a repository root so its linked worktrees can appear in the picker."
     footer="enter add • esc cancel"

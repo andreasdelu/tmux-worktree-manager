@@ -1,4 +1,5 @@
 import React from "react";
+import { theme } from "../theme";
 import type { Item } from "../types";
 import { CreateWorktreeDialog } from "./CreateWorktreeDialog";
 import { DialogFrame } from "./DialogFrame";
@@ -28,7 +29,7 @@ export const CreateWorktreeOverlay = ({
     <DialogFrame
       rootHeight={rootHeight}
       isSplit={isSplit}
-      borderColor="gray"
+      borderColor={theme.colors.border}
       title="Create worktree"
       subtitle={subtitle}
       footer="enter create • esc cancel"

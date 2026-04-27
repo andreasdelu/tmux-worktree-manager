@@ -1,5 +1,6 @@
 import React from "react";
 import { Box, Text } from "ink";
+import { theme } from "../theme";
 import type { Item } from "../types";
 
 type PreviewMetaRow = { label: string; value: string };
@@ -30,35 +31,35 @@ export const WorktreeDetails = ({
   return (
     <>
       <Box flexDirection="row">
-        <Text color="gray">{current.group}\</Text>
-        <Text bold color="cyan">
+        <Text color={theme.colors.muted}>{current.group}\</Text>
+        <Text bold color={theme.colors.accent}>
           {current.name}
         </Text>
-        {current.isPrimary ? <Text color="gray"> primary</Text> : null}
+        {current.isPrimary ? <Text color={theme.colors.muted}> primary</Text> : null}
       </Box>
-      {previewPath ? <Text color="gray">{previewPath}</Text> : null}
+      {previewPath ? <Text color={theme.colors.muted}>{previewPath}</Text> : null}
       <Text> </Text>
       {showPreviewLoading ? (
         <Box flexDirection="column">
-          <Text color="cyan">{loadingGlyph} Loading details…</Text>
-          <Text color="gray">
+          <Text color={theme.colors.accent}>{loadingGlyph} Loading details…</Text>
+          <Text color={theme.colors.muted}>
             Fetching branch, status, last commit, and changed files.
           </Text>
         </Box>
       ) : (
         <>
-          <Text bold color="gray">
+          <Text bold color={theme.colors.muted}>
             Overview
           </Text>
           {previewMetaRows.map((row, index) => (
             <Box key={`${current.path}:meta:${index}`}>
-              <Text color="gray">{row.label.padEnd(8, " ")}</Text>
+              <Text color={theme.colors.muted}>{row.label.padEnd(8, " ")}</Text>
               <Text>{row.value}</Text>
             </Box>
           ))}
 
           <Box flexDirection="column" marginTop={1}>
-            <Text bold color="gray">
+            <Text bold color={theme.colors.muted}>
               Changes
             </Text>
             {previewChanges.length > 0 ? (
@@ -68,7 +69,7 @@ export const WorktreeDetails = ({
                   if (match) {
                     return (
                       <Box key={`${current.path}:change:${index}`}>
-                        <Text color="gray">{match[1].padEnd(4, " ")}</Text>
+                        <Text color={theme.colors.muted}>{match[1].padEnd(4, " ")}</Text>
                         <Text>{match[2]}</Text>
                       </Box>
                     );
@@ -77,11 +78,11 @@ export const WorktreeDetails = ({
                   return <Text key={`${current.path}:change:${index}`}>{line}</Text>;
                 })}
                 {hiddenPreviewChanges > 0 ? (
-                  <Text color="gray">+{hiddenPreviewChanges} more changes</Text>
+                  <Text color={theme.colors.muted}>+{hiddenPreviewChanges} more changes</Text>
                 ) : null}
               </>
             ) : (
-              <Text color="gray">No uncommitted changes</Text>
+              <Text color={theme.colors.muted}>No uncommitted changes</Text>
             )}
           </Box>
 
