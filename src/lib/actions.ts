@@ -63,8 +63,8 @@ const suggestedCreateTargetRoot = (dir: string) => {
   return targetRoot;
 };
 
-export const suggestedCreateTargetDir = (dir: string, branchName: string) =>
-  path.join(suggestedCreateTargetRoot(dir), branchName);
+export const suggestedCreateTargetDir = (dir: string, worktreeName: string) =>
+  path.join(suggestedCreateTargetRoot(dir), worktreeName);
 
 export const removalBlockedReason = async (
   itemPath: string,
@@ -150,10 +150,11 @@ export const openItem = (itemPath: string) => {
 
 export const createItem = async (
   itemPath: string,
+  worktreeName: string,
   branchName: string,
 ): Promise<string> => {
   const mainRepo = await mainRepoForDirAsync(itemPath);
-  const targetDir = suggestedCreateTargetDir(itemPath, branchName);
+  const targetDir = suggestedCreateTargetDir(itemPath, worktreeName);
 
   if (fs.existsSync(targetDir)) {
     return `Target already exists: ${path.basename(targetDir)}`;

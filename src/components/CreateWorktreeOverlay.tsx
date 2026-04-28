@@ -8,7 +8,9 @@ type CreateWorktreeOverlayProps = {
   rootHeight: number;
   isSplit: boolean;
   current?: Item;
-  value: string;
+  worktreeName: string;
+  branchName: string;
+  activeField: "worktreeName" | "branchName";
   createTargetPath: string;
 };
 
@@ -16,7 +18,9 @@ export const CreateWorktreeOverlay = ({
   rootHeight,
   isSplit,
   current,
-  value,
+  worktreeName,
+  branchName,
+  activeField,
   createTargetPath,
 }: CreateWorktreeOverlayProps) => {
   const subtitle = current
@@ -32,10 +36,12 @@ export const CreateWorktreeOverlay = ({
       borderColor={theme.colors.border}
       title="Create worktree"
       subtitle={subtitle}
-      footer="enter create • esc cancel"
+      footer="tab switch field • enter create • esc cancel"
     >
       <CreateWorktreeDialog
-        value={value}
+        worktreeName={worktreeName}
+        branchName={branchName}
+        activeField={activeField}
         createTargetPath={createTargetPath}
       />
     </DialogFrame>

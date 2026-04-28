@@ -350,13 +350,15 @@ export const useTwmController = (listRowsTarget: number): TwmController => {
 
     return suggestedCreateTargetDir(
       current.path,
-      state.dialog.kind === "create" ? state.dialog.value || "<branch>" : "<branch>",
+      state.dialog.kind === "create"
+        ? state.dialog.worktreeName || "<worktree>"
+        : "<worktree>",
     );
   }, [
     current?.path,
     current?.kind,
     state.dialog.kind,
-    state.dialog.kind === "create" ? state.dialog.value : "",
+    state.dialog.kind === "create" ? state.dialog.worktreeName : "",
   ]);
   const previewMatchesCurrent = current?.kind === "worktree"
     ? state.previewPath === current.path && !state.previewLoading

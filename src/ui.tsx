@@ -330,7 +330,9 @@ export const DialogOverlay = ({
           rootHeight={rootHeight}
           isSplit={isSplit}
           current={current}
-          value={dialog.value}
+          worktreeName={dialog.worktreeName}
+          branchName={dialog.branchName}
+          activeField={dialog.field}
           createTargetPath={createTargetPath}
         />
       );

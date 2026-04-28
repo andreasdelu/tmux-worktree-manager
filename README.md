@@ -77,6 +77,8 @@ Files created on first run:
 - `j` / `k` or arrows — move
 - `enter` — open worktree session
 - `c` — create worktree
+  - create dialog accepts a short worktree name and an optional branch name
+  - `tab` switches fields; leaving branch blank uses the worktree name as the branch
 - `d` — close tmux session
 - `x` — remove worktree
   - blocked for the primary checkout

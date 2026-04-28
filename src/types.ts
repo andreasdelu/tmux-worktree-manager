@@ -63,7 +63,12 @@ export type ViewMode = "worktrees" | "sources";
 export type DialogState =
   | { kind: "none" }
   | { kind: "add-source"; value: string }
-  | { kind: "create"; value: string }
+  | {
+      kind: "create";
+      worktreeName: string;
+      branchName: string;
+      field: "worktreeName" | "branchName";
+    }
   | { kind: "confirm"; mode: ActionMode }
   | { kind: "notice"; title: string; message: string }
   | { kind: "running"; label: string };

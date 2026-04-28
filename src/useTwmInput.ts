@@ -44,6 +44,11 @@ export const useTwmInput = ({ exit, controller }: UseTwmInputArgs) => {
 
   const sanitizeSourceInput = (input: string) => input.replace(/[^ -~]/g, "");
 
+  const sanitizeWorktreeInput = (input: string) =>
+    Array.from(input)
+      .filter((char) => /^[A-Za-z0-9._-]$/.test(char))
+      .join("");
+
   const sanitizeBranchInput = (input: string) =>
     Array.from(input)
       .filter((char) => /^[A-Za-z0-9._/-]$/.test(char))
@@ -156,33 +161,51 @@ export const useTwmInput = ({ exit, controller }: UseTwmInputArgs) => {
       return true;
     }
 
+    if (key.tab) {
+      setState((current) =>
+        current.dialog.kind === "create"
+          ? {
+              ...current,
+              dialog: {
+                ...current.dialog,
+                field: current.dialog.field === "worktreeName"
+                  ? "branchName"
+                  : "worktreeName",
+              },
+            }
+          : current,
+      );
+      return true;
+    }
+
     if (key.return) {
       const current = state.items[state.selected];
-      const branchName = state.dialog.value.trim();
+      const worktreeName = state.dialog.worktreeName.trim();
+      const branchName = state.dialog.branchName.trim() || worktreeName;
 
       if (!current) {
         return true;
       }
 
-      const createdTargetDir = suggestedCreateTargetDir(current.path, branchName);
+      const createdTargetDir = suggestedCreateTargetDir(current.path, worktreeName);
 
-      if (!branchName) {
+      if (!worktreeName) {
         setState((currentState) => ({
           ...currentState,
-          message: "Enter a branch name",
+          message: "Enter a worktree name",
         }));
         return true;
       }
 
       setState((currentState) => ({
         ...currentState,
-        dialog: { kind: "running", label: `Creating worktree ${branchName}…` },
+        dialog: { kind: "running", label: `Creating worktree ${worktreeName}…` },
         message: "",
       }));
 
       void (async () => {
         await waitForPaint();
-        const message = await createItem(current.path, branchName);
+        const message = await createItem(current.path, worktreeName, branchName);
         const items = loadItems(sources);
 
         setState((currentState) => {
@@ -218,8 +241,8 @@ export const useTwmInput = ({ exit, controller }: UseTwmInputArgs) => {
           ? {
               ...current,
               dialog: {
-                kind: "create",
-                value: current.dialog.value.slice(0, -1),
+                ...current.dialog,
+                [current.dialog.field]: current.dialog[current.dialog.field].slice(0, -1),
               },
             }
           : current,
@@ -227,15 +250,17 @@ export const useTwmInput = ({ exit, controller }: UseTwmInputArgs) => {
       return true;
     }
 
-    const branchInput = sanitizeBranchInput(input);
-    if (branchInput) {
+    const dialogInput = state.dialog.field === "worktreeName"
+      ? sanitizeWorktreeInput(input)
+      : sanitizeBranchInput(input);
+    if (dialogInput) {
       setState((current) =>
         current.dialog.kind === "create"
           ? {
               ...current,
               dialog: {
-                kind: "create",
-                value: `${current.dialog.value}${branchInput}`,
+                ...current.dialog,
+                [current.dialog.field]: `${current.dialog[current.dialog.field]}${dialogInput}`,
               },
             }
           : current,
@@ -459,7 +484,12 @@ export const useTwmInput = ({ exit, controller }: UseTwmInputArgs) => {
     if (input === "c") {
       setState((current) => ({
         ...current,
-        dialog: { kind: "create", value: "" },
+        dialog: {
+          kind: "create",
+          worktreeName: "",
+          branchName: "",
+          field: "worktreeName",
+        },
         message: "",
       }));
       return true;
