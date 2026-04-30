@@ -134,6 +134,8 @@ When enabled, `twm` shows:
 - a small Pi badge in the worktree list
 - a `Pi Overwatch` box in the details pane
 
+Overwatch status refreshes periodically; spinner animations update in-place without driving a full React render loop.
+
 ## Config
 
 ### `worktree-roots`
@@ -191,6 +193,7 @@ set -g @twm-overwatch-dir '~/.pi/overwatch'
 - source paths must exist, be unique, and be Git repo roots
 - dialog inputs support paste
 - update checks are cached in `${XDG_CONFIG_HOME:-$HOME/.config}/twm/update-check.json`
+- worktree details are loaded after a short navigation idle delay to keep scrolling responsive
 
 ## Development
 

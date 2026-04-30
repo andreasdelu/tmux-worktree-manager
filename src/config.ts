@@ -96,5 +96,6 @@ export const ensureConfigDefaults = () => {
 };
 
 export const loadingFrames = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
+export const loadingFrameIntervalMs = 120;
 
-export const previewDebounceMs = 40;
+export const previewDebounceMs = 140;

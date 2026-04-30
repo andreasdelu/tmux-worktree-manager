@@ -6,7 +6,7 @@ type DialogFrameProps = {
   rootHeight: number;
   isSplit: boolean;
   borderColor: string;
-  title: string;
+  title: React.ReactNode;
   titleColor?: string;
   subtitle?: string;
   subtitleColor?: string;
@@ -45,9 +45,11 @@ export const DialogFrame = ({
       paddingY={1}
       flexDirection="column"
     >
-      <Text bold color={titleColor}>
-        {title}
-      </Text>
+      {typeof title === "string" ? (
+        <Text bold color={titleColor}>{title}</Text>
+      ) : (
+        title
+      )}
       {subtitle ? (
         <Box marginTop={1}>
           <Text color={subtitleColor}>{subtitle}</Text>

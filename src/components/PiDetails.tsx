@@ -3,11 +3,10 @@ import { Box, Text } from "ink";
 import { sortOverwatchAgents } from "../lib/overwatch";
 import { theme } from "../theme";
 import type { Item, OverwatchAgentState } from "../types";
+import { Spinner } from "./Spinner";
 
-const statusLabel = (status: string, loadingGlyph: string) => {
+const statusLabel = (status: string) => {
   switch (status) {
-    case "working":
-      return loadingGlyph;
     case "done":
       return "✓";
     case "stale":
@@ -141,13 +140,7 @@ const doingLabel = (status: string, phase?: string, toolName?: string) => {
   return phase || "—";
 };
 
-export const PiDetails = ({
-  current,
-  loadingGlyph,
-}: {
-  current: Item;
-  loadingGlyph: string;
-}) => {
+export const PiDetails = ({ current }: { current: Item }) => {
   if (current.kind !== "worktree") {
     return <Text color={theme.colors.muted}>No Pi activity for this worktree.</Text>;
   }
@@ -181,9 +174,16 @@ export const PiDetails = ({
 
         return (
           <Box key={`${current.path}:pi:${instance.agentId}`} height={1} overflow="hidden">
-            <Text color={statusColor(instance.status)}>
-              {fit(statusLabel(instance.status, loadingGlyph), STATE_WIDTH)}{" "}
-            </Text>
+            <Box width={STATE_WIDTH + 1} overflow="hidden">
+              {instance.status === "working" ? (
+                <Spinner color="cyan" />
+              ) : (
+                <Text color={statusColor(instance.status)}>
+                  {fit(statusLabel(instance.status), STATE_WIDTH)}
+                </Text>
+              )}
+              <Text> </Text>
+            </Box>
             <Box flexShrink={1} minWidth={0} overflow="hidden">
               <Text color={rowColor(instance.status)} wrap="truncate-end">
                 {detailsLine(

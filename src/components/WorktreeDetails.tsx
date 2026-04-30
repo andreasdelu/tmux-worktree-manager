@@ -2,6 +2,7 @@ import React from "react";
 import { Box, Text } from "ink";
 import { theme } from "../theme";
 import type { Item } from "../types";
+import { Spinner } from "./Spinner";
 
 type PreviewMetaRow = { label: string; value: string };
 
@@ -9,7 +10,6 @@ type WorktreeDetailsProps = {
   current: Item;
   previewPath: string;
   showPreviewLoading: boolean;
-  loadingGlyph: string;
   previewMetaRows: PreviewMetaRow[];
   previewChanges: string[];
   hiddenPreviewChanges: number;
@@ -19,7 +19,6 @@ export const WorktreeDetails = ({
   current,
   previewPath,
   showPreviewLoading,
-  loadingGlyph,
   previewMetaRows,
   previewChanges,
   hiddenPreviewChanges,
@@ -41,7 +40,10 @@ export const WorktreeDetails = ({
       <Text> </Text>
       {showPreviewLoading ? (
         <Box flexDirection="column">
-          <Text color={theme.colors.accent}>{loadingGlyph} Loading details…</Text>
+          <Box>
+            <Spinner color="cyan" />
+            <Text color={theme.colors.accent}> Loading details…</Text>
+          </Box>
           <Text color={theme.colors.muted}>
             Fetching branch, status, last commit, and changed files.
           </Text>
