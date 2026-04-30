@@ -1,77 +1,27 @@
+import { useCallback, useEffect, useRef } from "react";
+import { shallow } from "zustand/shallow";
 import {
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-  type Dispatch,
-  type SetStateAction,
-} from "react";
-import {
-  loadingFrames,
   overwatchEnabled,
   overwatchRefreshMs,
   previewDebounceMs,
 } from "./config";
-import type { AppState, PreviewData, SourceEntry, ViewMode } from "./types";
-import { loadSources, formatPath } from "./lib/sources";
+import type { PreviewData, SourceEntry } from "./types";
+import { loadSources } from "./lib/sources";
 import { annotateItemsWithLiveState, loadItems } from "./lib/discovery";
 import { startPreviewLoad } from "./lib/preview";
-import { suggestedCreateTargetDir } from "./lib/actions";
 import { checkForUpdate } from "./lib/update";
+import { useTwmStore } from "./store";
 
 export type PreviewMetaRow = { label: string; value: string };
 
 export type TwmController = {
-  view: ViewMode;
-  setView: Dispatch<SetStateAction<ViewMode>>;
-  sources: SourceEntry[];
-  setSources: Dispatch<SetStateAction<SourceEntry[]>>;
-  selectedSource: number;
-  setSelectedSource: Dispatch<SetStateAction<number>>;
-  state: AppState;
-  setState: Dispatch<SetStateAction<AppState>>;
   refreshItems: (message?: string, sourceEntries?: SourceEntry[]) => void;
   refreshLiveState: () => void;
   refreshPreview: (itemPath: string) => void;
-  visible: { start: number; end: number; rows: AppState["items"] };
-  currentSource?: SourceEntry;
-  current?: AppState["items"][number];
-  createTargetPath: string;
-  loadingGlyph: string;
-  previewPath: string;
-  showPreviewLoading: boolean;
-  previewMetaRows: PreviewMetaRow[];
-  previewChanges: string[];
-  hiddenPreviewChanges: number;
-  updateAvailableVersion: string | null;
 };
 
-export const useTwmController = (listRowsTarget: number): TwmController => {
+export const useTwmController = (): TwmController => {
   const previewCacheRef = useRef(new Map<string, PreviewData>());
-  const [view, setView] = useState<ViewMode>("worktrees");
-  const [sources, setSources] = useState<SourceEntry[]>(() => loadSources());
-  const sourcesRef = useRef(sources);
-  const [selectedSource, setSelectedSource] = useState(0);
-  const [previewReloadNonce, setPreviewReloadNonce] = useState(0);
-  const [state, setState] = useState<AppState>({
-    items: [],
-    selected: 0,
-    message: "",
-    dialog: { kind: "none" },
-    preview: null,
-    previewPath: "",
-    previewLoading: false,
-    loading: true,
-  });
-  const [loadingFrame, setLoadingFrame] = useState(0);
-  const [updateAvailableVersion, setUpdateAvailableVersion] = useState<
-    string | null
-  >(null);
-
-  useEffect(() => {
-    sourcesRef.current = sources;
-  }, [sources]);
 
   useEffect(() => {
     let cancelled = false;
@@ -80,7 +30,7 @@ export const useTwmController = (listRowsTarget: number): TwmController => {
       const latestVersion = await checkForUpdate();
 
       if (!cancelled) {
-        setUpdateAvailableVersion(latestVersion);
+        useTwmStore.getState().setUpdateAvailableVersion(latestVersion);
       }
     })();
 
@@ -89,30 +39,29 @@ export const useTwmController = (listRowsTarget: number): TwmController => {
     };
   }, []);
 
-  const refreshItems = useCallback((message = "", sourceEntries = sourcesRef.current) => {
-    const items = loadItems(sourceEntries);
+  const refreshItems = useCallback((message = "", sourceEntries?: SourceEntry[]) => {
+    const store = useTwmStore.getState();
+    const items = loadItems(sourceEntries ?? store.sources);
+    const nextSelected = Math.min(
+      store.selected,
+      Math.max(items.length - 1, 0),
+    );
 
-    setState((current) => {
-      const nextSelected = Math.min(
-        current.selected,
-        Math.max(items.length - 1, 0),
-      );
-
-      return {
-        ...current,
-        items,
-        selected: nextSelected,
-        loading: false,
-        message,
-        preview: null,
-        previewPath: items[nextSelected]?.path ?? "",
-        previewLoading: items[nextSelected]?.kind === "worktree",
-      };
-    });
+    store.setState((current) => ({
+      ...current,
+      items,
+      selected: nextSelected,
+      loading: false,
+      message,
+      preview: null,
+      previewPath: items[nextSelected]?.path ?? "",
+      previewLoading: items[nextSelected]?.kind === "worktree",
+    }));
   }, []);
 
   const refreshLiveState = useCallback(() => {
-    setState((current) => ({
+    const store = useTwmStore.getState();
+    store.setState((current) => ({
       ...current,
       items: annotateItemsWithLiveState(current.items),
     }));
@@ -120,23 +69,25 @@ export const useTwmController = (listRowsTarget: number): TwmController => {
 
   const refreshPreview = useCallback((itemPath: string) => {
     previewCacheRef.current.delete(itemPath);
-    setState((currentState) => ({
+    const store = useTwmStore.getState();
+    store.setState((currentState) => ({
       ...currentState,
       message: "",
       preview: null,
       previewPath: itemPath,
       previewLoading: true,
     }));
-    setPreviewReloadNonce((currentNonce) => currentNonce + 1);
+    store.bumpPreviewReloadNonce();
   }, []);
 
   useEffect(() => {
     const nextSources = loadSources();
-    setSources(nextSources);
+    const store = useTwmStore.getState();
+    store.setSources(nextSources);
 
     if (nextSources.length === 0) {
-      setView("sources");
-      setState((current) => ({
+      store.setView("sources");
+      store.setState((current) => ({
         ...current,
         loading: false,
         dialog: { kind: "add-source", value: "" },
@@ -146,282 +97,140 @@ export const useTwmController = (listRowsTarget: number): TwmController => {
     }
 
     refreshItems("", nextSources);
-  }, []);
+  }, [refreshItems]);
 
-  const hasWorkingOverwatch = useMemo(
-    () => state.items.some((item) => {
-      if (item.kind !== "worktree" || !item.overwatch) {
-        return false;
+  useEffect(() => {
+    if (!overwatchEnabled) {
+      return;
+    }
+
+    const interval = setInterval(() => {
+      const { view, dialog } = useTwmStore.getState();
+      if (view === "worktrees" && dialog.kind === "none") {
+        refreshLiveState();
       }
-
-      return item.overwatch.kind === "single"
-        ? item.overwatch.agent.status === "working"
-        : item.overwatch.agents.some((agent) => agent.status === "working");
-    }),
-    [state.items],
-  );
-
-  useEffect(() => {
-    if (!(state.loading || state.previewLoading || state.dialog.kind === "running" || hasWorkingOverwatch)) {
-      return;
-    }
-
-    const interval = setInterval(() => {
-      setLoadingFrame((current) => (current + 1) % loadingFrames.length);
-    }, 90);
-
-    return () => {
-      clearInterval(interval);
-    };
-  }, [state.loading, state.previewLoading, state.dialog.kind, hasWorkingOverwatch]);
-
-  useEffect(() => {
-    if (!overwatchEnabled || view !== "worktrees" || state.dialog.kind !== "none") {
-      return;
-    }
-
-    const interval = setInterval(() => {
-      refreshLiveState();
     }, overwatchRefreshMs);
 
     return () => {
       clearInterval(interval);
     };
-  }, [view, state.dialog.kind, refreshLiveState]);
+  }, [refreshLiveState]);
 
   useEffect(() => {
-    if (view !== "worktrees") {
-      return;
-    }
-
-    const current = state.items[state.selected];
-
-    if (!current) {
-      setState((existing) => ({
-        ...existing,
-        preview: null,
-        previewPath: "",
-        previewLoading: false,
-      }));
-      return;
-    }
-
-    if (current.kind === "source-empty") {
-      setState((existing) => ({
-        ...existing,
-        preview: null,
-        previewPath: current.path,
-        previewLoading: false,
-      }));
-      return;
-    }
-
-    const cachedPreview = previewCacheRef.current.get(current.path);
-    if (cachedPreview) {
-      setState((existing) => ({
-        ...existing,
-        preview: cachedPreview,
-        previewPath: current.path,
-        previewLoading: false,
-      }));
-      return;
-    }
-
     let cancelled = false;
+    let timer: Timer | null = null;
     let cancelPreviewLoad: (() => void) | null = null;
-    const timer = setTimeout(() => {
-      setState((existing) => {
-        if (existing.previewPath === current.path && existing.previewLoading) {
-          return existing;
-        }
 
-        return {
+    const cleanupPreviewLoad = () => {
+      cancelled = true;
+      if (timer) {
+        clearTimeout(timer);
+        timer = null;
+      }
+      cancelPreviewLoad?.();
+      cancelPreviewLoad = null;
+    };
+
+    const runPreviewLoad = () => {
+      cleanupPreviewLoad();
+      cancelled = false;
+
+      const store = useTwmStore.getState();
+      if (store.view !== "worktrees") {
+        return;
+      }
+
+      const current = store.items[store.selected];
+
+      if (!current) {
+        store.setState((existing) => ({
+          ...existing,
+          preview: null,
+          previewPath: "",
+          previewLoading: false,
+        }));
+        return;
+      }
+
+      if (current.kind === "source-empty") {
+        store.setState((existing) => ({
           ...existing,
           preview: null,
           previewPath: current.path,
-          previewLoading: true,
-        };
-      });
+          previewLoading: false,
+        }));
+        return;
+      }
 
-      const previewLoad = startPreviewLoad(current.path);
-      cancelPreviewLoad = previewLoad.cancel;
+      const cachedPreview = previewCacheRef.current.get(current.path);
+      if (cachedPreview) {
+        store.setState((existing) => ({
+          ...existing,
+          preview: cachedPreview,
+          previewPath: current.path,
+          previewLoading: false,
+        }));
+        return;
+      }
 
-      void (async () => {
-        const preview = await previewLoad.promise;
-
-        if (cancelled || !preview) {
-          return;
-        }
-
-        previewCacheRef.current.set(current.path, preview);
-
-        setState((existing) => {
-          if (existing.previewPath !== current.path) {
+      timer = setTimeout(() => {
+        store.setState((existing) => {
+          if (existing.previewPath === current.path && existing.previewLoading) {
             return existing;
           }
 
           return {
             ...existing,
-            preview,
-            previewLoading: false,
+            preview: null,
+            previewPath: current.path,
+            previewLoading: true,
           };
         });
-      })();
-    }, previewDebounceMs);
 
-    return () => {
-      cancelled = true;
-      clearTimeout(timer);
-      cancelPreviewLoad?.();
-    };
-  }, [view, state.items, state.selected, previewReloadNonce]);
+        const previewLoad = startPreviewLoad(current.path);
+        cancelPreviewLoad = previewLoad.cancel;
 
-  const visible = useMemo(() => {
-    if (state.items.length === 0) {
-      return { start: 0, end: 0, rows: [] };
-    }
+        void (async () => {
+          const preview = await previewLoad.promise;
 
-    const selected = Math.min(state.selected, state.items.length - 1);
-    const sliceHeight = (start: number, end: number) => {
-      let height = 0;
-      let lastGroup = "";
-
-      for (let index = start; index < end; index++) {
-        const item = state.items[index];
-        const showGroup = item.group !== lastGroup;
-
-        if (showGroup) {
-          if (index !== start) {
-            height += 1;
+          if (cancelled || !preview) {
+            return;
           }
 
-          height += 1;
-          lastGroup = item.group;
-        }
+          previewCacheRef.current.set(current.path, preview);
 
-        height += 1;
-      }
+          useTwmStore.getState().setState((existing) => {
+            if (existing.previewPath !== current.path) {
+              return existing;
+            }
 
-      return height;
+            return {
+              ...existing,
+              preview,
+              previewLoading: false,
+            };
+          });
+        })();
+      }, previewDebounceMs);
     };
 
-    let start = selected;
-    let end = selected + 1;
-
-    while (start > 0 || end < state.items.length) {
-      const previousStart = start - 1;
-      const nextEnd = end + 1;
-      const canAddPrevious =
-        start > 0 && sliceHeight(previousStart, end) <= listRowsTarget;
-      const canAddNext =
-        end < state.items.length && sliceHeight(start, nextEnd) <= listRowsTarget;
-
-      if (!canAddPrevious && !canAddNext) {
-        break;
-      }
-
-      const linesBefore = selected - start;
-      const linesAfter = end - selected - 1;
-
-      if (canAddPrevious && (!canAddNext || linesBefore <= linesAfter)) {
-        start = previousStart;
-      } else {
-        end = nextEnd;
-      }
-    }
-
-    return {
-      start,
-      end,
-      rows: state.items.slice(start, end),
-    };
-  }, [state.items, state.selected, listRowsTarget]);
-
-  const currentSource = sources[selectedSource];
-  const current = state.items[state.selected];
-  const createTargetPath = useMemo(() => {
-    if (!current) {
-      return "";
-    }
-
-    if (!(current.kind === "source-empty" || state.dialog.kind === "create")) {
-      return "";
-    }
-
-    return suggestedCreateTargetDir(
-      current.path,
-      state.dialog.kind === "create"
-        ? state.dialog.worktreeName || "<worktree>"
-        : "<worktree>",
+    const unsubscribe = useTwmStore.subscribe(
+      (state) => [state.view, state.items, state.selected, state.previewReloadNonce] as const,
+      runPreviewLoad,
+      { equalityFn: shallow },
     );
-  }, [
-    current?.path,
-    current?.kind,
-    state.dialog.kind,
-    state.dialog.kind === "create" ? state.dialog.worktreeName : "",
-  ]);
-  const previewMatchesCurrent = current?.kind === "worktree"
-    ? state.previewPath === current.path && !state.previewLoading
-    : false;
-  const cachedPreview = current?.kind === "worktree"
-    ? (previewCacheRef.current.get(current.path) ?? null)
-    : null;
-  const effectivePreview = previewMatchesCurrent ? state.preview : cachedPreview;
-  const showPreviewLoading = current?.kind === "worktree" ? !effectivePreview : false;
-  const previewPath = effectivePreview?.path
-    ? formatPath(effectivePreview.path)
-    : formatPath(current?.path ?? "");
-  const previewMetaRows = [
-    current?.kind === "worktree" && current.isPrimary
-      ? { label: "Role", value: "primary checkout" }
-      : null,
-    effectivePreview?.branch
-      ? { label: "Branch", value: effectivePreview.branch }
-      : null,
-    effectivePreview?.base
-      ? { label: "Base", value: effectivePreview.base }
-      : null,
-    effectivePreview?.track
-      ? { label: "Track", value: effectivePreview.track }
-      : null,
-    effectivePreview
-      ? { label: "Status", value: effectivePreview.status }
-      : null,
-    effectivePreview?.tmux
-      ? { label: "Tmux", value: effectivePreview.tmux }
-      : null,
-    effectivePreview?.last
-      ? { label: "Last", value: effectivePreview.last }
-      : null,
-  ].filter((row): row is PreviewMetaRow => row !== null);
-  const previewChanges = effectivePreview?.changes.slice(0, 5) ?? [];
-  const hiddenPreviewChanges = Math.max(
-    0,
-    (effectivePreview?.changes.length ?? 0) - previewChanges.length,
-  );
+
+    runPreviewLoad();
+
+    return () => {
+      unsubscribe();
+      cleanupPreviewLoad();
+    };
+  }, []);
 
   return {
-    view,
-    setView,
-    sources,
-    setSources,
-    selectedSource,
-    setSelectedSource,
-    state,
-    setState,
     refreshItems,
     refreshLiveState,
     refreshPreview,
-    visible,
-    currentSource,
-    current,
-    createTargetPath,
-    loadingGlyph: loadingFrames[loadingFrame],
-    previewPath,
-    showPreviewLoading,
-    previewMetaRows,
-    previewChanges,
-    hiddenPreviewChanges,
-    updateAvailableVersion,
   };
 };

@@ -9,38 +9,27 @@ import {
   removalBlockedReason,
   suggestedCreateTargetDir,
 } from "./lib/actions";
+import { useTwmStore } from "./store";
 import type { TwmController } from "./useTwmController";
 
 type UseTwmInputArgs = {
   exit: () => void;
-  controller: Pick<
-    TwmController,
-    | "view"
-    | "setView"
-    | "sources"
-    | "setSources"
-    | "selectedSource"
-    | "setSelectedSource"
-    | "state"
-    | "setState"
-    | "refreshItems"
-    | "refreshPreview"
-  >;
+  controller: TwmController;
 };
 
 export const useTwmInput = ({ exit, controller }: UseTwmInputArgs) => {
-  const {
-    view,
-    setView,
-    sources,
-    setSources,
-    selectedSource,
-    setSelectedSource,
-    state,
-    setState,
-    refreshItems,
-    refreshPreview,
-  } = controller;
+  const view = useTwmStore((state) => state.view);
+  const sources = useTwmStore((state) => state.sources);
+  const selectedSource = useTwmStore((state) => state.selectedSource);
+  const items = useTwmStore((state) => state.items);
+  const selected = useTwmStore((state) => state.selected);
+  const dialog = useTwmStore((state) => state.dialog);
+  const loading = useTwmStore((state) => state.loading);
+  const setView = useTwmStore((state) => state.setView);
+  const setSources = useTwmStore((state) => state.setSources);
+  const setSelectedSource = useTwmStore((state) => state.setSelectedSource);
+  const setState = useTwmStore((state) => state.setState);
+  const { refreshItems, refreshPreview } = controller;
 
   const sanitizeSourceInput = (input: string) => input.replace(/[^ -~]/g, "");
 
@@ -63,7 +52,7 @@ export const useTwmInput = ({ exit, controller }: UseTwmInputArgs) => {
   };
 
   const handleAddSourceDialogInput = (input: string, key: any) => {
-    if (state.dialog.kind !== "add-source") {
+    if (dialog.kind !== "add-source") {
       return false;
     }
 
@@ -73,7 +62,7 @@ export const useTwmInput = ({ exit, controller }: UseTwmInputArgs) => {
     }
 
     if (key.return) {
-      const nextPath = state.dialog.value.trim();
+      const nextPath = dialog.value.trim();
       if (!nextPath) {
         setState((current) => ({ ...current, message: "Enter a repo path" }));
         return true;
@@ -152,7 +141,7 @@ export const useTwmInput = ({ exit, controller }: UseTwmInputArgs) => {
   };
 
   const handleCreateDialogInput = (input: string, key: any) => {
-    if (state.dialog.kind !== "create") {
+    if (dialog.kind !== "create") {
       return false;
     }
 
@@ -179,9 +168,9 @@ export const useTwmInput = ({ exit, controller }: UseTwmInputArgs) => {
     }
 
     if (key.return) {
-      const current = state.items[state.selected];
-      const worktreeName = state.dialog.worktreeName.trim();
-      const branchName = state.dialog.branchName.trim() || worktreeName;
+      const current = items[selected];
+      const worktreeName = dialog.worktreeName.trim();
+      const branchName = dialog.branchName.trim() || worktreeName;
 
       if (!current) {
         return true;
@@ -206,10 +195,11 @@ export const useTwmInput = ({ exit, controller }: UseTwmInputArgs) => {
       void (async () => {
         await waitForPaint();
         const message = await createItem(current.path, worktreeName, branchName);
-        const items = loadItems(sources);
+        const latestSources = useTwmStore.getState().sources;
+        const nextItems = loadItems(latestSources);
 
         setState((currentState) => {
-          const createdIndex = items.findIndex(
+          const createdIndex = nextItems.findIndex(
             (item) => item.path === createdTargetDir,
           );
           const nextSelected =
@@ -217,18 +207,18 @@ export const useTwmInput = ({ exit, controller }: UseTwmInputArgs) => {
               ? createdIndex
               : Math.min(
                   currentState.selected,
-                  Math.max(items.length - 1, 0),
+                  Math.max(nextItems.length - 1, 0),
                 );
 
           return {
             ...currentState,
-            items,
+            items: nextItems,
             selected: nextSelected,
             dialog: { kind: "none" },
             message,
             preview: null,
-            previewPath: items[nextSelected]?.path ?? "",
-            previewLoading: items[nextSelected]?.kind === "worktree",
+            previewPath: nextItems[nextSelected]?.path ?? "",
+            previewLoading: nextItems[nextSelected]?.kind === "worktree",
           };
         });
       })();
@@ -250,7 +240,7 @@ export const useTwmInput = ({ exit, controller }: UseTwmInputArgs) => {
       return true;
     }
 
-    const dialogInput = state.dialog.field === "worktreeName"
+    const dialogInput = dialog.field === "worktreeName"
       ? sanitizeWorktreeInput(input)
       : sanitizeBranchInput(input);
     if (dialogInput) {
@@ -272,7 +262,7 @@ export const useTwmInput = ({ exit, controller }: UseTwmInputArgs) => {
   };
 
   const handleNoticeDialogInput = (input: string, key: any) => {
-    if (state.dialog.kind !== "notice") {
+    if (dialog.kind !== "notice") {
       return false;
     }
 
@@ -289,13 +279,13 @@ export const useTwmInput = ({ exit, controller }: UseTwmInputArgs) => {
   };
 
   const handleConfirmDialogInput = (input: string, key: any) => {
-    if (state.dialog.kind !== "confirm") {
+    if (dialog.kind !== "confirm") {
       return false;
     }
 
     if (input === "y") {
-      const current = state.items[state.selected];
-      const actionMode = state.dialog.mode;
+      const current = items[selected];
+      const actionMode = dialog.mode;
       if (current && current.kind === "worktree") {
         const actionLabel =
           actionMode === "kill"
@@ -311,23 +301,24 @@ export const useTwmInput = ({ exit, controller }: UseTwmInputArgs) => {
         void (async () => {
           await waitForPaint();
           const message = await performAction(actionMode, current.path);
-          const items = loadItems(sources);
+          const latestSources = useTwmStore.getState().sources;
+          const nextItems = loadItems(latestSources);
 
           setState((currentState) => {
             const nextSelected = Math.min(
               currentState.selected,
-              Math.max(items.length - 1, 0),
+              Math.max(nextItems.length - 1, 0),
             );
 
             return {
               ...currentState,
-              items,
+              items: nextItems,
               selected: nextSelected,
               dialog: { kind: "none" },
               message,
               preview: null,
-              previewPath: items[nextSelected]?.path ?? "",
-              previewLoading: items[nextSelected]?.kind === "worktree",
+              previewPath: nextItems[nextSelected]?.path ?? "",
+              previewLoading: nextItems[nextSelected]?.kind === "worktree",
             };
           });
         })();
@@ -416,7 +407,7 @@ export const useTwmInput = ({ exit, controller }: UseTwmInputArgs) => {
     }
 
     if (key.return) {
-      const current = state.items[state.selected];
+      const current = items[selected];
       if (current?.kind === "worktree") {
         openItem(current.path);
         exit();
@@ -425,7 +416,7 @@ export const useTwmInput = ({ exit, controller }: UseTwmInputArgs) => {
     }
 
     if (input === "r") {
-      const current = state.items[state.selected];
+      const current = items[selected];
       if (current?.kind === "worktree") {
         refreshItems(`Refreshed ${current.name}`);
         refreshPreview(current.path);
@@ -434,7 +425,7 @@ export const useTwmInput = ({ exit, controller }: UseTwmInputArgs) => {
     }
 
     if (input === "d") {
-      if (state.items[state.selected]?.kind === "worktree") {
+      if (items[selected]?.kind === "worktree") {
         setState((current) => ({
           ...current,
           dialog: { kind: "confirm", mode: "kill" },
@@ -444,7 +435,7 @@ export const useTwmInput = ({ exit, controller }: UseTwmInputArgs) => {
     }
 
     if (input === "x") {
-      const current = state.items[state.selected];
+      const current = items[selected];
       if (current?.kind === "worktree") {
         if (current.isPrimary) {
           setState((currentState) => ({
@@ -499,7 +490,7 @@ export const useTwmInput = ({ exit, controller }: UseTwmInputArgs) => {
   };
 
   useInput((input, key) => {
-    if (state.loading || state.dialog.kind === "running") {
+    if (loading || dialog.kind === "running") {
       return;
     }
 

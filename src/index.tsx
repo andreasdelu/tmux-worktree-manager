@@ -8,7 +8,6 @@ import {
   SidebarPane,
   StatusLine,
 } from "./ui";
-import { formatPath } from "./lib/sources";
 import { useTwmController } from "./useTwmController";
 import { useTwmInput } from "./useTwmInput";
 
@@ -36,7 +35,7 @@ const App = () => {
     : Math.max(6, mainPanelsHeight - sidebarPaneHeight - stackedPaneGap);
   const sidebarRowsTarget = Math.max(3, sidebarPaneHeight - 4);
 
-  const controller = useTwmController(sidebarRowsTarget);
+  const controller = useTwmController();
 
   useTwmInput({ exit, controller });
 
@@ -54,57 +53,21 @@ const App = () => {
         overflow="hidden"
       >
         <SidebarPane
-          view={controller.view}
-          loading={controller.state.loading}
-          loadingGlyph={controller.loadingGlyph}
-          visibleRows={controller.visible.rows}
-          visibleStart={controller.visible.start}
-          selected={controller.state.selected}
-          sources={controller.sources}
-          selectedSource={controller.selectedSource}
           isSplit={isSplit}
           mainPanelsHeight={sidebarPaneHeight}
           sourceRowsTarget={sidebarRowsTarget}
         />
         <DetailsPane
-          view={controller.view}
-          current={controller.current}
-          currentSource={controller.currentSource}
           isSplit={isSplit}
           mainPanelsHeight={detailsPaneHeight}
-          previewPath={controller.previewPath}
-          showPreviewLoading={controller.showPreviewLoading}
-          loadingGlyph={controller.loadingGlyph}
-          previewMetaRows={controller.previewMetaRows}
-          previewChanges={controller.previewChanges}
-          hiddenPreviewChanges={controller.hiddenPreviewChanges}
-          formatPath={formatPath}
-          createTargetPath={controller.createTargetPath}
         />
       </Box>
 
-      <StatusLine
-        message={controller.state.message}
-        dialog={controller.state.dialog}
-        view={controller.view}
-        statusBoxHeight={statusBoxHeight}
-        updateAvailableVersion={controller.updateAvailableVersion}
-      />
+      <StatusLine statusBoxHeight={statusBoxHeight} />
 
-      <HelpLine
-        view={controller.view}
-        keybindLegendHeight={keybindLegendHeight}
-        current={controller.current}
-      />
+      <HelpLine keybindLegendHeight={keybindLegendHeight} />
 
-      <DialogOverlay
-        dialog={controller.state.dialog}
-        rootHeight={rootHeight}
-        isSplit={isSplit}
-        current={controller.current}
-        createTargetPath={controller.createTargetPath}
-        loadingGlyph={controller.loadingGlyph}
-      />
+      <DialogOverlay rootHeight={rootHeight} isSplit={isSplit} />
     </Box>
   );
 };

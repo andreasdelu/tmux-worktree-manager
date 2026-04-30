@@ -1,9 +1,12 @@
-import React from "react";
+import React, { useMemo } from "react";
 import { Box, Text } from "ink";
 import { overwatchEnabled } from "./config";
 import { theme } from "./theme";
 import { currentVersion } from "./version";
-import type { DialogState, Item, SourceEntry, ViewMode } from "./types";
+import type { Item, SourceEntry, ViewMode } from "./types";
+import { formatPath } from "./lib/sources";
+import { suggestedCreateTargetDir } from "./lib/actions";
+import { useTwmStore } from "./store";
 import { AddSourceOverlay } from "./components/AddSourceOverlay";
 import { ConfirmOverlay } from "./components/ConfirmOverlay";
 import { CreateWorktreeOverlay } from "./components/CreateWorktreeOverlay";
@@ -19,93 +22,164 @@ import { WorktreeSidebar } from "./components/WorktreeSidebar";
 
 type PreviewMetaRow = { label: string; value: string };
 
+const visibleWorktreeRows = (
+  items: Item[],
+  selectedIndex: number,
+  listRowsTarget: number,
+) => {
+  if (items.length === 0) {
+    return { start: 0, end: 0, rows: [] };
+  }
+
+  const selected = Math.min(selectedIndex, items.length - 1);
+  const sliceHeight = (start: number, end: number) => {
+    let height = 0;
+    let lastGroup = "";
+
+    for (let index = start; index < end; index++) {
+      const item = items[index];
+      const showGroup = item.group !== lastGroup;
+
+      if (showGroup) {
+        if (index !== start) {
+          height += 1;
+        }
+
+        height += 1;
+        lastGroup = item.group;
+      }
+
+      height += 1;
+    }
+
+    return height;
+  };
+
+  let start = selected;
+  let end = selected + 1;
+
+  while (start > 0 || end < items.length) {
+    const previousStart = start - 1;
+    const nextEnd = end + 1;
+    const canAddPrevious =
+      start > 0 && sliceHeight(previousStart, end) <= listRowsTarget;
+    const canAddNext =
+      end < items.length && sliceHeight(start, nextEnd) <= listRowsTarget;
+
+    if (!canAddPrevious && !canAddNext) {
+      break;
+    }
+
+    const linesBefore = selected - start;
+    const linesAfter = end - selected - 1;
+
+    if (canAddPrevious && (!canAddNext || linesBefore <= linesAfter)) {
+      start = previousStart;
+    } else {
+      end = nextEnd;
+    }
+  }
+
+  return {
+    start,
+    end,
+    rows: items.slice(start, end),
+  };
+};
+
+const useCurrentItem = () =>
+  useTwmStore((state) => state.items[state.selected]);
+
+const useCreateTargetPath = (current?: Item) => {
+  const dialog = useTwmStore((state) => state.dialog);
+
+  return useMemo(() => {
+    if (!current) {
+      return "";
+    }
+
+    if (!(current.kind === "source-empty" || dialog.kind === "create")) {
+      return "";
+    }
+
+    return suggestedCreateTargetDir(
+      current.path,
+      dialog.kind === "create"
+        ? dialog.worktreeName || "<worktree>"
+        : "<worktree>",
+    );
+  }, [current?.path, current?.kind, dialog.kind, dialog.kind === "create" ? dialog.worktreeName : ""]);
+};
+
 type SidebarPaneProps = {
-  view: ViewMode;
-  loading: boolean;
-  loadingGlyph: string;
-  visibleRows: Item[];
-  visibleStart: number;
-  selected: number;
-  sources: SourceEntry[];
-  selectedSource: number;
   isSplit: boolean;
   mainPanelsHeight: number;
   sourceRowsTarget: number;
 };
 
 export const SidebarPane = ({
-  view,
-  loading,
-  loadingGlyph,
-  visibleRows,
-  visibleStart,
-  selected,
-  sources,
-  selectedSource,
   isSplit,
   mainPanelsHeight,
   sourceRowsTarget,
-}: SidebarPaneProps) => (
-  <Box
-    flexDirection="column"
-    width={isSplit ? "33%" : undefined}
-    flexGrow={isSplit ? 0 : 1}
-    height={mainPanelsHeight}
-    overflow="hidden"
-    borderStyle="round"
-    borderColor={theme.colors.border}
-    paddingX={1}
-  >
-    <SidebarTabs view={view} />
-    {view === "worktrees" ? (
-      <WorktreeSidebar
-        loading={loading}
-        loadingGlyph={loadingGlyph}
-        visibleRows={visibleRows}
-        visibleStart={visibleStart}
-        selected={selected}
-      />
-    ) : (
-      <SourceSidebar
-        sources={sources}
-        selectedSource={selectedSource}
-        maxRows={sourceRowsTarget}
-      />
-    )}
-  </Box>
-);
+}: SidebarPaneProps) => {
+  const view = useTwmStore((state) => state.view);
+  const loading = useTwmStore((state) => state.loading);
+  const items = useTwmStore((state) => state.items);
+  const selected = useTwmStore((state) => state.selected);
+  const sources = useTwmStore((state) => state.sources);
+  const selectedSource = useTwmStore((state) => state.selectedSource);
+  const visible = useMemo(
+    () => visibleWorktreeRows(items, selected, sourceRowsTarget),
+    [items, selected, sourceRowsTarget],
+  );
+
+  return (
+    <Box
+      flexDirection="column"
+      width={isSplit ? "33%" : undefined}
+      flexGrow={isSplit ? 0 : 1}
+      height={mainPanelsHeight}
+      overflow="hidden"
+      borderStyle="round"
+      borderColor={theme.colors.border}
+      paddingX={1}
+    >
+      <SidebarTabs view={view} />
+      {view === "worktrees" ? (
+        <WorktreeSidebar
+          loading={loading}
+          visibleRows={visible.rows}
+          visibleStart={visible.start}
+          selected={selected}
+        />
+      ) : (
+        <SourceSidebar
+          sources={sources}
+          selectedSource={selectedSource}
+          maxRows={sourceRowsTarget}
+        />
+      )}
+    </Box>
+  );
+};
 
 type DetailsPaneProps = {
-  view: ViewMode;
-  current?: Item;
-  currentSource?: SourceEntry;
   isSplit: boolean;
   mainPanelsHeight: number;
-  previewPath: string;
-  showPreviewLoading: boolean;
-  loadingGlyph: string;
-  previewMetaRows: PreviewMetaRow[];
-  previewChanges: string[];
-  hiddenPreviewChanges: number;
-  formatPath: (itemPath: string) => string;
-  createTargetPath: string;
 };
 
 export const DetailsPane = ({
-  view,
-  current,
-  currentSource,
   isSplit,
   mainPanelsHeight,
-  previewPath,
-  showPreviewLoading,
-  loadingGlyph,
-  previewMetaRows,
-  previewChanges,
-  hiddenPreviewChanges,
-  formatPath,
-  createTargetPath,
 }: DetailsPaneProps) => {
+  const view = useTwmStore((state) => state.view);
+  const current = useCurrentItem();
+  const currentSource = useTwmStore((state) => state.sources[state.selectedSource]);
+  const dialog = useTwmStore((state) => state.dialog);
+  const preview = useTwmStore((state) => state.preview);
+  const previewPathRaw = useTwmStore((state) => state.previewPath);
+  const previewLoading = useTwmStore((state) => state.previewLoading);
+  const createTargetPath = useCreateTargetPath(current);
   const showPiPane =
     overwatchEnabled && view === "worktrees" && current?.kind === "worktree";
   const piHeight = showPiPane
@@ -114,6 +188,42 @@ export const DetailsPane = ({
   const detailsHeight = showPiPane
     ? Math.max(3, mainPanelsHeight - piHeight)
     : mainPanelsHeight;
+  const previewMatchesCurrent = current?.kind === "worktree"
+    ? previewPathRaw === current.path && !previewLoading
+    : false;
+  const effectivePreview = previewMatchesCurrent ? preview : null;
+  const showPreviewLoading = current?.kind === "worktree" ? !effectivePreview : false;
+  const previewPath = effectivePreview?.path
+    ? formatPath(effectivePreview.path)
+    : formatPath(current?.path ?? "");
+  const previewMetaRows = [
+    current?.kind === "worktree" && current.isPrimary
+      ? { label: "Role", value: "primary checkout" }
+      : null,
+    effectivePreview?.branch
+      ? { label: "Branch", value: effectivePreview.branch }
+      : null,
+    effectivePreview?.base
+      ? { label: "Base", value: effectivePreview.base }
+      : null,
+    effectivePreview?.track
+      ? { label: "Track", value: effectivePreview.track }
+      : null,
+    effectivePreview
+      ? { label: "Status", value: effectivePreview.status }
+      : null,
+    effectivePreview?.tmux
+      ? { label: "Tmux", value: effectivePreview.tmux }
+      : null,
+    effectivePreview?.last
+      ? { label: "Last", value: effectivePreview.last }
+      : null,
+  ].filter((row): row is PreviewMetaRow => row !== null);
+  const previewChanges = effectivePreview?.changes.slice(0, 5) ?? [];
+  const hiddenPreviewChanges = Math.max(
+    0,
+    (effectivePreview?.changes.length ?? 0) - previewChanges.length,
+  );
 
   return (
     <Box
@@ -149,7 +259,6 @@ export const DetailsPane = ({
                 current={current}
                 previewPath={previewPath}
                 showPreviewLoading={showPreviewLoading}
-                loadingGlyph={loadingGlyph}
                 previewMetaRows={previewMetaRows}
                 previewChanges={previewChanges}
                 hiddenPreviewChanges={hiddenPreviewChanges}
@@ -179,7 +288,7 @@ export const DetailsPane = ({
             <Text color={theme.colors.primary}>Pi Overwatch</Text>
           </Box>
           {current ? (
-            <PiDetails current={current} loadingGlyph={loadingGlyph} />
+            <PiDetails current={current} />
           ) : null}
         </Box>
       ) : null}
@@ -188,20 +297,14 @@ export const DetailsPane = ({
 };
 
 type StatusLineProps = {
-  message: string;
-  dialog: DialogState;
-  view: ViewMode;
   statusBoxHeight: number;
-  updateAvailableVersion: string | null;
 };
 
-export const StatusLine = ({
-  message,
-  dialog,
-  view,
-  statusBoxHeight,
-  updateAvailableVersion,
-}: StatusLineProps) => {
+export const StatusLine = ({ statusBoxHeight }: StatusLineProps) => {
+  const message = useTwmStore((state) => state.message);
+  const dialog = useTwmStore((state) => state.dialog);
+  const view = useTwmStore((state) => state.view);
+  const updateAvailableVersion = useTwmStore((state) => state.updateAvailableVersion);
   const baseStatus = message
     ? message
     : dialog.kind === "running"
@@ -257,16 +360,12 @@ export const StatusLine = ({
 };
 
 type HelpLineProps = {
-  view: ViewMode;
   keybindLegendHeight: number;
-  current?: Item;
 };
 
-export const HelpLine = ({
-  view,
-  keybindLegendHeight,
-  current,
-}: HelpLineProps) => {
+export const HelpLine = ({ keybindLegendHeight }: HelpLineProps) => {
+  const view = useTwmStore((state) => state.view);
+  const current = useCurrentItem();
   const worktreeLegend =
     current?.kind === "source-empty"
       ? "tab sources • j/k move • c create first worktree • q quit"
@@ -297,22 +396,18 @@ export const HelpLine = ({
 };
 
 type DialogOverlayProps = {
-  dialog: DialogState;
   rootHeight: number;
   isSplit: boolean;
-  current?: Item;
-  createTargetPath: string;
-  loadingGlyph: string;
 };
 
 export const DialogOverlay = ({
-  dialog,
   rootHeight,
   isSplit,
-  current,
-  createTargetPath,
-  loadingGlyph,
 }: DialogOverlayProps) => {
+  const dialog = useTwmStore((state) => state.dialog);
+  const current = useCurrentItem();
+  const createTargetPath = useCreateTargetPath(current);
+
   switch (dialog.kind) {
     case "none":
       return null;
@@ -359,7 +454,6 @@ export const DialogOverlay = ({
         <RunningOverlay
           rootHeight={rootHeight}
           isSplit={isSplit}
-          loadingGlyph={loadingGlyph}
           label={dialog.label}
         />
       );
