@@ -6,7 +6,15 @@ import { runCommand, runCommandSync } from "./commands";
 const safeSessionToken = (value: string, fallback: string) =>
   value.replace(/[ /.]/g, "-").replace(/[^A-Za-z0-9_-]/g, "") || fallback;
 
+const sessionNameCache = new Map<string, string>();
+const checksumCache = new Map<string, string>();
+
 const shortChecksumFor = (value: string) => {
+  const cached = checksumCache.get(value);
+  if (cached) {
+    return cached;
+  }
+
   const proc = Bun.spawnSync({
     cmd: [
       "bash",
@@ -20,20 +28,31 @@ const shortChecksumFor = (value: string) => {
     env: process.env,
   });
   const checksum = Number.parseInt(proc.stdout.toString().trim() || "0", 10);
-  return checksum.toString(16).padStart(4, "0").slice(-4);
+  const shortChecksum = checksum.toString(16).padStart(4, "0").slice(-4);
+  checksumCache.set(value, shortChecksum);
+  return shortChecksum;
 };
 
 export const sessionNameFor = (dir: string): string => {
+  const cacheKey = path.resolve(dir);
+  const cached = sessionNameCache.get(cacheKey);
+  if (cached) {
+    return cached;
+  }
+
   const worktreeRoot = repoRootFor(dir);
   const repoRoot = mainRepoRootFor(dir);
   const safeRepo = safeSessionToken(path.basename(repoRoot), "repo");
 
   if (path.resolve(worktreeRoot) === path.resolve(repoRoot)) {
+    sessionNameCache.set(cacheKey, safeRepo);
     return safeRepo;
   }
 
   const safeWorktree = safeSessionToken(path.basename(worktreeRoot), "worktree");
-  return `${safeRepo}__${safeWorktree}--${shortChecksumFor(worktreeRoot)}`;
+  const sessionName = `${safeRepo}__${safeWorktree}--${shortChecksumFor(worktreeRoot)}`;
+  sessionNameCache.set(cacheKey, sessionName);
+  return sessionName;
 };
 
 export const loadTmuxSessionNames = (): Set<string> => {

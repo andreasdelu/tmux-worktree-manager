@@ -9,6 +9,7 @@ import type {
 } from "../types";
 
 const agentsDir = path.join(overwatchDir, "agents");
+const normalizedPathCache = new Map<string, string>();
 
 const normalizePath = (value: string): string => {
   if (!value) {
@@ -20,11 +21,20 @@ const normalizePath = (value: string): string => {
     : value.startsWith("~/")
       ? path.join(os.homedir(), value.slice(2))
       : value;
+  const cacheKey = path.resolve(expanded);
+  const cached = normalizedPathCache.get(cacheKey);
+  if (cached) {
+    return cached;
+  }
 
   try {
-    return fs.realpathSync(expanded);
+    const normalized = fs.realpathSync(expanded);
+    normalizedPathCache.set(cacheKey, normalized);
+    return normalized;
   } catch {
-    return path.resolve(expanded);
+    const normalized = path.resolve(expanded);
+    normalizedPathCache.set(cacheKey, normalized);
+    return normalized;
   }
 };
 
