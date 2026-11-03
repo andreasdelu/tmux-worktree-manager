@@ -141,6 +141,9 @@ test("real tmux live scan fetches message text only for selected worktree", asyn
   const server = `twm-selected-messages-${process.pid}`;
   const tmux = (...args: string[]) => execFileSync("tmux", ["-L", server, "-f", "/dev/null", ...args], { encoding: "utf8", timeout: 2000 }).trim();
   const previous = process.env.TMUX;
+  const previousOrigin = process.env.TWM_ORIGIN_SESSION;
+  const previousClient = process.env.TWM_ORIGIN_CLIENT;
+  delete process.env.TWM_ORIGIN_CLIENT;
   const a = item("/repo/a", "a"), b = item("/repo/b", "b");
   try {
     for (const entry of [a, b]) {
@@ -150,15 +153,21 @@ test("real tmux live scan fetches message text only for selected worktree", asyn
     }
     process.env.TMUX = tmux("display-message", "-p", "-t", "a", "#{socket_path},#{pid},0");
     await Bun.sleep(50); // let exec replace the initial shell in each pane
+    process.env.TWM_ORIGIN_SESSION = tmux("display-message", "-p", "-t", "a", "#{session_id}");
     const metadata = await loadLiveItems([a, b]);
+    expect(metadata.map(entry => entry.isCurrentSession)).toEqual([true, false]);
+    process.env.TWM_ORIGIN_SESSION = tmux("display-message", "-p", "-t", "b", "#{session_id}");
     expect(metadata.map(entry => entry.agentPanes?.[0]?.messages)).toEqual([undefined, undefined]);
     const selected = await loadLiveItems([a, b], b.path);
+    expect(selected.map(entry => entry.isCurrentSession)).toEqual([false, true]);
     expect(selected[1]?.agentUnavailable).toBe(false);
     expect(selected[1]?.agentPanes).toHaveLength(1);
     expect(selected[0]?.agentPanes?.[0]?.messages).toBeUndefined();
     expect(selected[1]?.agentPanes?.[0]?.messages?.human).toBe("b human");
   } finally {
     if (previous === undefined) delete process.env.TMUX; else process.env.TMUX = previous;
+    if (previousOrigin === undefined) delete process.env.TWM_ORIGIN_SESSION; else process.env.TWM_ORIGIN_SESSION = previousOrigin;
+    if (previousClient === undefined) delete process.env.TWM_ORIGIN_CLIENT; else process.env.TWM_ORIGIN_CLIENT = previousClient;
     try { tmux("kill-server"); } catch {}
   }
 });

@@ -238,6 +238,16 @@ test("text input keeps its cursor visible after resize and spinner animates thro
   } finally { app.unmount(); stdout.destroy(); }
 });
 
+test("current-session marker is separate from selection and not baked into worktree names", async () => {
+  const active = { ...current, isCurrentSession: true };
+  const other = { ...current, path: "/repo/other", name: "other", isCurrentSession: false };
+  useTwmStore.setState({ view: "worktrees", items: [active, other], selected: 1, loading: false });
+  const text = await snapshot(12, <SidebarPane mainPanelsHeight={12} isSplit sourceRowsTarget={10} />);
+  expect(text).toContain("repo (current)");
+  expect(text).not.toContain("other (current)");
+  expect(active.name).toBe("repo");
+});
+
 test("grouped shortcut hints wrap without losing available actions in a narrow terminal", async () => {
   const selected = { ...current, isPrimary: false, hasSession: true };
   useTwmStore.setState({ view: "worktrees", items: [selected], selected: 0, closeOnOpen: false });

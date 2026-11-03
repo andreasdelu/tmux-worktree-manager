@@ -64,6 +64,7 @@ const WorktreeRow = React.memo(({
               {item.name}
             </Text>
           </Box>
+          {item.isCurrentSession ? <Text color={theme.colors.accent}> (current)</Text> : null}
           {item.kind === "worktree" && item.isPrimary ? (
             <Text color={theme.colors.muted}> primary</Text>
           ) : null}

@@ -37,6 +37,22 @@ Open `twm` with:
 prefix + W
 ```
 
+## Persistent popup
+
+The TPM binding starts a hidden helper lazily, then reuses the same twm process on subsequent opens. Each invoking tmux client has its own helper session on a private server at `<host-socket>.twm`, so helpers do not appear in the normal server's session picker or worktree assignment list.
+
+Opening a worktree switches the invoking host client and detaches the popup. `q`, Esc or Ctrl+C also detach; queued removals continue in the helper. Reopening preserves selection and refreshes repository state when no dialog or removal is active. `(current)` identifies the worktree associated with the invoking client's current session, not the helper session. Standalone launches keep their existing close-on-open preference.
+
+Custom popup launchers must invoke `bash /path/to/twm/scripts/popup.sh` inside `display-popup`, passing `TWM_ORIGIN_CLIENT` and `TWM_ORIGIN_SESSION` using `display-popup -e`, as `plugin.tmux` does. Calling `scripts/run.sh` directly still launches a transient UI. Update/reload the TPM binding to enable persistence; existing custom dotfiles overrides are not changed automatically.
+
+Helpers live until their UI exits or their private server is stopped. To reset them after an update, first let pending removals finish, then run:
+
+```sh
+tmux -S "$(tmux display-message -p '#{socket_path}').twm" kill-server
+```
+
+The next popup launch starts a fresh helper with the current binary. tmux popup Escape itself may close the attachment even during a dialog; reopen to resume the same dialog.
+
 ## First run
 
 If you have no sources yet, `twm` opens the add-source flow.
@@ -80,7 +96,7 @@ Files created on first run:
 
 - `j` / `k` or arrows — move
 - `h` / `l` — jump to the previous/next source group, without wrapping
-- `enter` — open worktree session; twm stays open by default
+- `enter` — open worktree session; persistent popups detach, standalone twm stays open by default
 - `a` — assign an existing unassigned tmux session to the selected checkout/worktree (`j/k` to pick, Enter to assign, Esc to cancel)
   - available when the checkout has no matching session; sessions matching other configured checkouts are excluded
   - links the checkout to the session without renaming it, preserving windows, panes and running processes; does not change existing pane directories, switch clients or run `layout.sh`
@@ -101,8 +117,8 @@ Files created on first run:
 - `x` — remove worktree
   - blocked for the primary checkout
   - after confirmation, shows `Removing…` inline; additional removals show `Queued…` and run one at a time, with fresh safety checks before each starts
-  - other worktrees can be opened while removals run; twm temporarily stays open even with close-on-open enabled so the queue can finish. Worktrees queued for removal cannot be opened or queued twice
-  - create/close/assign/source changes, refresh and quitting (including Ctrl+C) wait for the queue to drain; confirmation dialogs can still be cancelled
+  - other worktrees can be opened while removals run. Persistent popups detach while the helper finishes the queue; transient/standalone launches stay open until it finishes. Worktrees queued for removal cannot be opened or queued twice
+  - create/close/assign/source changes and manual refresh wait for the queue to drain; transient/standalone quitting (including Ctrl+C) also waits. Confirmation dialogs can still be cancelled
   - a failed reconciliation skips pending removals and fences actions until `r` obtains a fresh list
 - `r` — refresh
 - `tab` — switch to sources
@@ -144,7 +160,7 @@ Encoded previews live in `@twm_pi_messages`. Encoding protects command framing, 
 
 The sidebar keeps the `π` agent marker with icons and colors only, with status symbols directly adjacent (`π✓`, `π?`): an animated cyan icon for busy, yellow `?` for input, green `✓` for finished, red `!` for failure, and gray `■` for stopped/exited. Idle/detected uses gray `π` alone. Busy agents animate in the Agent status panel too. The agent panel shows **working**, **thinking**, **responding**, concrete tool activity and elapsed run time. Settled runs show a green **Finished** checkmark, **Run failed**, or **Stopped** until the next run; Finished means the runtime settled, not that the requested task succeeded. Idle means no run has been observed since the reporter loaded. Needs input refers to explicit extension dialogs, not a natural-language question in an assistant response. Parent status describes that pane's Pi runtime. For Pax's `pax_subagent`, the reporter also listens through Pi's general `pi.events` bus to `pax:subagent-activity`: active children keep the sidebar icon busy even after the parent finishes. In the Agent status panel, a dedicated animated cyan **Subagents working** row sits indented below **Agent**, only while children are active. Inactive children add no row and do not imply success; uncertain observations remain explicit on the Agent line as **Subagent status unknown**. Each group's height includes the extra row while active; expired, malformed or mismatched child observations show unknown instead of a Finished checkmark. The event supplies only aggregate active/inactive, not counts, individual states or success/failure. Loading or enabling the reporter with `pax_subagent` available starts at `children unknown` until an activity event arrives, because Pax exposes no initial snapshot query. Inactive children do not prove task success. Other subagent providers are not yet tracked; Pi has no universal child-status contract. Child activity uses owner-bound, expiring `@twm_pi_children` metadata, cleared along with reporting on shutdown/off. Existing v1 reporters keep coarse status until you update their copied files and reload. Missing/malformed reports, failed runtime observations, and reports at least 15 seconds old show **status unavailable**; an expired report never claims idle. Detection remains heuristic, and no match does not prove absence.
 
-While the popup is open, tmux metadata is polled every three seconds. Panes match by twm session identity first, then by current directory within a worktree. Closing the popup stops its polling, not the agent's reporter.
+While twm runs, tmux metadata is polled every three seconds. Panes match by twm session identity first, then by current directory within a worktree. A persistent helper continues polling while detached; transient UI exit stops its polling, not the agent's reporter.
 
 ## Performance checks
 
@@ -153,7 +169,8 @@ bun run scripts/benchmark.ts     # discovery time and subprocess counts
 bun run scripts/performance.ts   # repeated local discovery/poll timings and synthetic ownership scale probes
 bun run compile
 bun run scripts/startup-smoke.ts # cached first paint and safety with deliberately delayed Git
-bun run scripts/smoke.ts         # compiled popup behavior, including assignment and session preservation
+bun run scripts/smoke.ts         # compiled transient behavior, assignment and session preservation
+bun run scripts/popup-smoke.ts   # persistent helper reuse, current row, host switching and detached removal
 ```
 
 Timing scripts use the tmux server's PATH when available, matching the popup rather than coding-harness Git wrappers. Scale probes are synthetic, not normal-workload claims. The performance script polls metadata only, without fetching message previews.
@@ -187,7 +204,7 @@ The association is an encoded canonical worktree path in the session-local `@twm
 
 ### `preferences.json`
 
-Opening a worktree keeps twm open by default. There is no UI toggle. To opt into closing after opening, set `{"closeOnOpen":true}` in the config directory's `preferences.json`. Existing explicit settings are respected; missing, invalid or non-boolean values keep twm open. Use `false` or remove the key to restore the default. Restart twm after editing.
+Standalone/transient launches keep twm open by default; persistent popups always detach on open without exiting the helper. There is no UI toggle. To opt into closing after opening, set `{"closeOnOpen":true}` in the config directory's `preferences.json`. Existing explicit settings are respected; missing, invalid or non-boolean values keep twm open. Use `false` or remove the key to restore the default. Restart twm after editing.
 
 ### `worktree-roots`
 

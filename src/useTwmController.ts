@@ -12,6 +12,7 @@ import { checkForUpdate } from "./lib/update";
 import { loadPullRequests, cancelPullRequestLoads } from "./lib/pullRequests";
 import { initialStartupCache, useTwmStore } from "./store";
 import { getSourcesKey, writeStartupCache } from "./lib/startupCache";
+import { isPersistentPopup, refreshPopupOrigin } from "./lib/popup";
 
 export type PreviewMetaRow = { label: string; value: string };
 
@@ -178,9 +179,18 @@ export const useTwmController = (): TwmController => {
 
   useEffect(() => {
     let polling = false;
+    let generation = isPersistentPopup() ? refreshPopupOrigin() : "";
     const interval = setInterval(() => {
-      const { view, dialog } = useTwmStore.getState();
-      if (!polling && view === "worktrees" && dialog.kind === "none") {
+      const { view, dialog, removingPaths } = useTwmStore.getState();
+      if (polling) return;
+      let nextGeneration = generation;
+      try { if (isPersistentPopup()) nextGeneration = refreshPopupOrigin(); }
+      catch { return; } // No valid routing context means no background actions.
+      if (nextGeneration !== generation && dialog.kind === "none" && !removingPaths.length) {
+        generation = nextGeneration;
+        polling = true;
+        void refreshItems().finally(() => { polling = false; });
+      } else if (view === "worktrees" && dialog.kind === "none") {
         polling = true;
         void refreshLiveState().finally(() => { polling = false; });
       }
@@ -189,7 +199,7 @@ export const useTwmController = (): TwmController => {
     return () => {
       clearInterval(interval);
     };
-  }, [refreshLiveState]);
+  }, [refreshItems, refreshLiveState]);
 
   useEffect(() => {
     let request: { cancelled: boolean } | null = null;

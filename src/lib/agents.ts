@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { runCommand } from "./commands";
+import { refreshPopupOrigin } from "./popup";
 import type { AgentPane, AgentReport, Item } from "../types";
 import { defaultSessionNameFor } from "./session";
 import { associatedSessionName, parseSessionRecords, sessionListFormat } from "./sessionAssociations";
@@ -126,19 +127,34 @@ export const annotateAgentPanes = (items: Item[], panes: AgentPane[], sessions: 
 };
 
 export const loadLiveItems = async (items: Item[], messagePath?: string): Promise<Item[]> => {
-  const [sessionResult, paneResult] = await Promise.all([
+  refreshPopupOrigin();
+  const originClient = process.env.TWM_ORIGIN_CLIENT;
+  const originSession = process.env.TWM_ORIGIN_SESSION || process.env.TMUX_PANE;
+  const [sessionResult, paneResult, currentResult] = await Promise.all([
     runCommand(["tmux", "list-sessions", "-F", sessionListFormat]),
     runCommand(["tmux", "list-panes", "-a", "-F", agentMetadataFormat]),
+    originClient
+      ? runCommand(["tmux", "list-clients", "-F", "#{client_name}\t#{session_id}"])
+      : originSession ? runCommand(["tmux", "display-message", "-p", "-t", originSession, "#{session_id}"])
+      : Promise.resolve({ success: false, stdout: "" }),
   ]);
+  const clientMatches = originClient ? currentResult.stdout.split("\n").map(line => line.split("\t"))
+    .filter(([name]) => name === originClient) : [];
+  const currentId = !currentResult.success ? "" : originClient
+    ? clientMatches.length === 1 ? clientMatches[0]?.[1] ?? "" : ""
+    : currentResult.stdout.trim();
   const records = parseSessionRecords(sessionResult.stdout);
   const sessions = new Map(records.map(session => [session.id, session.name]));
   try {
     items = items.map(item => item.kind === "worktree" ? { ...item,
       sessionName: associatedSessionName(item.path, defaultSessionNameFor(item.path), records),
+      isCurrentSession: false,
     } : item);
+    const currentName = /^\$\d+$/.test(currentId) ? sessions.get(currentId) : undefined;
+    items = items.map(item => ({ ...item, isCurrentSession: !!currentName && item.sessionName === currentName }));
   } catch {
     // Ambiguous ownership is unavailable, never an invented assignment.
-    return items.map(item => ({ ...item, hasSession: false, agentPanes: [], agentUnavailable: true }));
+    return items.map(item => ({ ...item, hasSession: false, isCurrentSession: false, agentPanes: [], agentUnavailable: true }));
   }
   const panes = parseAgentPanes(paneResult.stdout);
   let cursor = 0;
