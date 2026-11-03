@@ -1,3 +1,5 @@
+import type { Subprocess } from "bun";
+
 const ansiRegex = /\x1B\[[0-?]*[ -/]*[@-~]/g;
 
 export const runCommandSync = (cmd: string[]) => {
@@ -39,13 +41,12 @@ export const startTextCommand = (cmd: string[], processes?: Subprocess[]) => {
 };
 
 export const runCommand = async (cmd: string[]) => {
-  const { stdout, stderr, exitCode } = await startTextCommand(cmd).promise;
-  return {
-    stdout,
-    stderr,
-    exitCode,
-    success: exitCode === 0,
-  };
+  try {
+    const { stdout, stderr, exitCode } = await startTextCommand(cmd).promise;
+    return { stdout, stderr, exitCode, success: exitCode === 0 };
+  } catch (error) {
+    return { stdout: "", stderr: error instanceof Error ? error.message : "Command failed", exitCode: -1, success: false };
+  }
 };
 
 export const waitForPaint = () =>

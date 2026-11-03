@@ -1,16 +1,22 @@
 import { useInput } from "ink";
+import { useRef } from "react";
+import path from "node:path";
+import { parseBranchInput } from "./lib/branchInput";
+import { cleanInput, editInput } from "./components/TextInput";
 import { parseSourceEntry, writeSources } from "./lib/sources";
-import { loadItems } from "./lib/discovery";
+import { reloadRepositoryItems } from "./lib/discovery";
 import { waitForPaint } from "./lib/commands";
+import { assignSession, listUnassignedSessions } from "./lib/session";
 import {
-  createItem,
+  createItemResult,
   openItem,
   performAction,
   removalBlockedReason,
-  suggestedCreateTargetDir,
 } from "./lib/actions";
 import { useTwmStore } from "./store";
 import type { TwmController } from "./useTwmController";
+import type { CreateField } from "./types";
+import { enterSession, sessionFor } from "./lib/session";
 
 type UseTwmInputArgs = {
   exit: () => void;
@@ -18,6 +24,8 @@ type UseTwmInputArgs = {
 };
 
 export const useTwmInput = ({ exit, controller }: UseTwmInputArgs) => {
+  const inputGeneration = useRef(0);
+  const removalQueue = useRef<Promise<void>>(Promise.resolve());
   const view = useTwmStore((state) => state.view);
   const sources = useTwmStore((state) => state.sources);
   const selectedSource = useTwmStore((state) => state.selectedSource);
@@ -30,18 +38,6 @@ export const useTwmInput = ({ exit, controller }: UseTwmInputArgs) => {
   const setSelectedSource = useTwmStore((state) => state.setSelectedSource);
   const setState = useTwmStore((state) => state.setState);
   const { refreshItems, refreshPreview } = controller;
-
-  const sanitizeSourceInput = (input: string) => input.replace(/[^ -~]/g, "");
-
-  const sanitizeWorktreeInput = (input: string) =>
-    Array.from(input)
-      .filter((char) => /^[A-Za-z0-9._-]$/.test(char))
-      .join("");
-
-  const sanitizeBranchInput = (input: string) =>
-    Array.from(input)
-      .filter((char) => /^[A-Za-z0-9._/-]$/.test(char))
-      .join("");
 
   const cancelDialog = () => {
     setState((current) => ({
@@ -68,7 +64,10 @@ export const useTwmInput = ({ exit, controller }: UseTwmInputArgs) => {
         return true;
       }
 
-      const nextEntry = parseSourceEntry(nextPath);
+      setState(current => ({ ...current, dialog: { kind: "running", label: "Checking repository…" } }));
+      void (async () => {
+      const nextEntry = await parseSourceEntry(nextPath);
+      setState(current => ({ ...current, dialog: { kind: "add-source", value: nextPath } }));
       const duplicate = sources.find(
         (source) => source.resolvedPath === nextEntry.resolvedPath,
       );
@@ -102,41 +101,14 @@ export const useTwmInput = ({ exit, controller }: UseTwmInputArgs) => {
       setSources(nextSources);
       setSelectedSource(Math.max(nextSources.length - 1, 0));
       setState((current) => ({ ...current, dialog: { kind: "none" } }));
-      refreshItems(`Added source ${nextEntry.path}`, nextSources);
+      await refreshItems(`Added source ${nextEntry.path}`, nextSources);
+      })();
       return true;
     }
 
-    if (key.backspace || key.delete) {
-      setState((current) =>
-        current.dialog.kind === "add-source"
-          ? {
-              ...current,
-              dialog: {
-                kind: "add-source",
-                value: current.dialog.value.slice(0, -1),
-              },
-            }
-          : current,
-      );
-      return true;
-    }
-
-    const sourceInput = sanitizeSourceInput(input);
-    if (sourceInput) {
-      setState((current) =>
-        current.dialog.kind === "add-source"
-          ? {
-              ...current,
-              dialog: {
-                kind: "add-source",
-                value: `${current.dialog.value}${sourceInput}`,
-              },
-            }
-          : current,
-      );
-      return true;
-    }
-
+    setState(current => current.dialog.kind === "add-source" ? { ...current, dialog: {
+      ...current.dialog, ...editInput(current.dialog.value, current.dialog.cursor, cleanInput(input), key),
+    } } : current);
     return true;
   };
 
@@ -157,9 +129,12 @@ export const useTwmInput = ({ exit, controller }: UseTwmInputArgs) => {
               ...current,
               dialog: {
                 ...current.dialog,
-                field: current.dialog.field === "worktreeName"
-                  ? "branchName"
-                  : "worktreeName",
+                cursor: undefined,
+                field: (() => {
+                  const fields: CreateField[] = ["worktreeName", "branchName", "baseRef", "createSession", "openSession"];
+                  const index = fields.indexOf(current.dialog.field);
+                  return fields[(index + (key.shift ? fields.length - 1 : 1)) % fields.length]!;
+                })(),
               },
             }
           : current,
@@ -167,8 +142,20 @@ export const useTwmInput = ({ exit, controller }: UseTwmInputArgs) => {
       return true;
     }
 
+    if ((dialog.field === "createSession" || dialog.field === "openSession") && input === " ") {
+      setState(state => {
+        if (state.dialog.kind !== "create") return state;
+        const mode = state.dialog.sessionMode;
+        const sessionMode = state.dialog.field === "createSession"
+          ? mode === "none" ? "create" : "none"
+          : mode === "open" ? "create" : "open";
+        return { ...state, dialog: { ...state.dialog, sessionMode } };
+      });
+      return true;
+    }
+
     if (key.return) {
-      const current = items[selected];
+      const current = items.find(item => item.path === dialog.sourcePath);
       const worktreeName = dialog.worktreeName.trim();
       const branchName = dialog.branchName.trim() || worktreeName;
 
@@ -176,7 +163,7 @@ export const useTwmInput = ({ exit, controller }: UseTwmInputArgs) => {
         return true;
       }
 
-      const createdTargetDir = suggestedCreateTargetDir(current.path, worktreeName);
+      const createdTargetDir = path.join(current.createRoot, worktreeName);
 
       if (!worktreeName) {
         setState((currentState) => ({
@@ -194,9 +181,17 @@ export const useTwmInput = ({ exit, controller }: UseTwmInputArgs) => {
 
       void (async () => {
         await waitForPaint();
-        const message = await createItem(current.path, worktreeName, branchName);
+        const result = await createItemResult(current.path, worktreeName, branchName, dialog.baseRef.trim() || undefined, current.createRoot, dialog.sessionMode);
+        let message = result.message;
         const latestSources = useTwmStore.getState().sources;
-        const nextItems = loadItems(latestSources);
+        let nextItems;
+        try { nextItems = await reloadRepositoryItems(useTwmStore.getState().items, latestSources, current.repoRoot); }
+        catch {
+          useTwmStore.setState({ cachedList: true });
+          setState(state => ({ ...state, dialog: { kind: "none" }, message: `${message}; could not refresh worktrees. Press r to reconcile before changing anything.` }));
+          useTwmStore.getState().bumpPreviewReloadNonce();
+          return;
+        }
 
         setState((currentState) => {
           const createdIndex = nextItems.findIndex(
@@ -218,46 +213,44 @@ export const useTwmInput = ({ exit, controller }: UseTwmInputArgs) => {
             message,
             preview: null,
             previewPath: nextItems[nextSelected]?.path ?? "",
-            previewLoading: nextItems[nextSelected]?.kind === "worktree",
+            previewLoading: nextItems[nextSelected]?.kind === "worktree" && nextItems[nextSelected]?.available,
           };
         });
+        useTwmStore.getState().bumpPreviewReloadNonce();
+        if (dialog.sessionMode === "open" && result.sessionReady) {
+          try {
+            const session = sessionFor(createdTargetDir);
+            if (!session) throw new Error("Created tmux session is no longer available");
+            enterSession(session.id);
+            if (useTwmStore.getState().closeOnOpen) exit();
+            else void controller.refreshLiveState();
+          } catch (error) {
+            message += `; could not open tmux session: ${error instanceof Error ? error.message : String(error)}`;
+            setState(state => ({ ...state, message }));
+          }
+        }
       })();
       return true;
     }
 
-    if (key.backspace || key.delete) {
-      setState((current) =>
-        current.dialog.kind === "create"
-          ? {
-              ...current,
-              dialog: {
-                ...current.dialog,
-                [current.dialog.field]: current.dialog[current.dialog.field].slice(0, -1),
-              },
-            }
-          : current,
-      );
-      return true;
+    if (dialog.field === "createSession" || dialog.field === "openSession") return true;
+    const dialogInput = cleanInput(input);
+    if (dialogInput && !key.ctrl && !key.meta) {
+      if (dialogInput.length > 1 && dialogInput.includes("/") &&
+          ((dialog.field === "worktreeName" && !dialog.worktreeName && !dialog.branchName) ||
+            (dialog.field === "branchName" && !dialog.worktreeName && !dialog.branchName))) {
+        const suggestion = parseBranchInput(dialogInput.trim());
+        setState(state => state.dialog.kind === "create" ? { ...state, dialog: {
+          ...state.dialog, ...suggestion, cursor: undefined,
+        } } : state);
+        return true;
+      }
     }
-
-    const dialogInput = dialog.field === "worktreeName"
-      ? sanitizeWorktreeInput(input)
-      : sanitizeBranchInput(input);
-    if (dialogInput) {
-      setState((current) =>
-        current.dialog.kind === "create"
-          ? {
-              ...current,
-              dialog: {
-                ...current.dialog,
-                [current.dialog.field]: `${current.dialog[current.dialog.field]}${dialogInput}`,
-              },
-            }
-          : current,
-      );
-      return true;
-    }
-
+    setState(current => {
+      if (current.dialog.kind !== "create" || current.dialog.field === "createSession" || current.dialog.field === "openSession") return current;
+      const edited = editInput(current.dialog[current.dialog.field], current.dialog.cursor, dialogInput, key);
+      return { ...current, dialog: { ...current.dialog, [current.dialog.field]: edited.value, cursor: edited.cursor } };
+    });
     return true;
   };
 
@@ -284,13 +277,57 @@ export const useTwmInput = ({ exit, controller }: UseTwmInputArgs) => {
     }
 
     if (input === "y") {
-      const current = items[selected];
+      const current = items.find(item => item.path === dialog.targetPath);
       const actionMode = dialog.mode;
       if (current && current.kind === "worktree") {
-        const actionLabel =
-          actionMode === "kill"
-            ? `Closing tmux session for ${current.name}…`
-            : `Removing worktree ${current.name}…`;
+        if (actionMode === "remove") {
+          const latest = useTwmStore.getState();
+          if (latest.cachedList || latest.removingPaths.includes(current.path)) {
+            cancelDialog();
+            return true;
+          }
+          // Reserve immediately, then serialize Git writes and reconciliation.
+          // The queue also fences actions on rows that haven't started yet.
+          useTwmStore.setState({ removingPaths: [...latest.removingPaths, current.path], syncing: false });
+          useTwmStore.getState().bumpPreviewReloadNonce();
+          setState(state => ({ ...state, dialog: { kind: "none" }, message: "" }));
+          removalQueue.current = removalQueue.current.then(async () => {
+            let message = "";
+            try {
+              if (useTwmStore.getState().cachedList) {
+                setState(state => ({ ...state, message: `Skipped removal of ${current.name}; press r to reconcile first.` }));
+                return;
+              }
+              await waitForPaint();
+              // performAction repeats safety checks when this queued job starts.
+              message = await performAction("remove", current.path);
+              const latest = useTwmStore.getState();
+              const refreshed = await reloadRepositoryItems(latest.items, latest.sources, current.repoRoot);
+              setState(state => {
+                const selectedPath = state.items[state.selected]?.path;
+                // Keep live updates to other sources made while Git was busy.
+                const repoItems = refreshed.filter(item => item.repoRoot === current.repoRoot);
+                const firstIndex = state.items.findIndex(item => item.repoRoot === current.repoRoot);
+                const nextItems = state.items.filter(item => item.repoRoot !== current.repoRoot);
+                nextItems.splice(firstIndex < 0 ? nextItems.length : firstIndex, 0, ...repoItems);
+                const byPath = nextItems.findIndex(item => item.path === selectedPath);
+                const selected = byPath >= 0 ? byPath : Math.min(state.selected, Math.max(0, nextItems.length - 1));
+                return { ...state, items: nextItems, selected, message, preview: null,
+                  previewPath: nextItems[selected]?.path ?? "", previewLoading: !!nextItems[selected]?.available };
+              });
+            } catch {
+              // A failed reconciliation leaves display rows unverified even if
+              // Git succeeded. Reuse startup's mutation fence until r succeeds.
+              useTwmStore.setState({ cachedList: true });
+              setState(state => ({ ...state, message: `${message ? `${message}; ` : ""}could not refresh worktrees. Press r to reconcile before changing anything.` }));
+            } finally {
+              useTwmStore.setState(state => ({ removingPaths: state.removingPaths.filter(itemPath => itemPath !== current.path) }));
+              useTwmStore.getState().bumpPreviewReloadNonce();
+            }
+          });
+          return true;
+        }
+        const actionLabel = `Closing tmux session for ${current.name}…`;
 
         setState((currentState) => ({
           ...currentState,
@@ -302,7 +339,14 @@ export const useTwmInput = ({ exit, controller }: UseTwmInputArgs) => {
           await waitForPaint();
           const message = await performAction(actionMode, current.path);
           const latestSources = useTwmStore.getState().sources;
-          const nextItems = loadItems(latestSources);
+          let nextItems;
+          try { nextItems = await reloadRepositoryItems(useTwmStore.getState().items, latestSources, current.repoRoot); }
+          catch {
+            useTwmStore.setState({ cachedList: true });
+            setState(state => ({ ...state, dialog: { kind: "none" }, message: `${message}; could not refresh worktrees. Press r to reconcile before changing anything.` }));
+            useTwmStore.getState().bumpPreviewReloadNonce();
+            return;
+          }
 
           setState((currentState) => {
             const nextSelected = Math.min(
@@ -318,19 +362,26 @@ export const useTwmInput = ({ exit, controller }: UseTwmInputArgs) => {
               message,
               preview: null,
               previewPath: nextItems[nextSelected]?.path ?? "",
-              previewLoading: nextItems[nextSelected]?.kind === "worktree",
+              previewLoading: nextItems[nextSelected]?.kind === "worktree" && nextItems[nextSelected]?.available,
             };
           });
+          useTwmStore.getState().bumpPreviewReloadNonce();
         })();
       }
       return true;
     }
 
-    if (key.escape || input === "n" || input === "q" || input === "\r") {
+    if (key.escape || key.return || input === "n" || input === "q" || input === "\r") {
       cancelDialog();
       return true;
     }
 
+    return true;
+  };
+
+  const blockCachedAction = () => {
+    if (!useTwmStore.getState().cachedList) return false;
+    setState(state => ({ ...state, message: "Syncing… wait for fresh repository state before changing anything." }));
     return true;
   };
 
@@ -357,6 +408,7 @@ export const useTwmInput = ({ exit, controller }: UseTwmInputArgs) => {
     }
 
     if (input === "a") {
+      if (blockCachedAction()) return true;
       setState((current) => ({
         ...current,
         dialog: { kind: "add-source", value: "" },
@@ -366,6 +418,7 @@ export const useTwmInput = ({ exit, controller }: UseTwmInputArgs) => {
     }
 
     if (input === "x") {
+      if (blockCachedAction()) return true;
       const source = sources[selectedSource];
       if (!source) {
         return true;
@@ -385,6 +438,10 @@ export const useTwmInput = ({ exit, controller }: UseTwmInputArgs) => {
   };
 
   const handleWorktreesViewInput = (input: string, key: any) => {
+    if (key.pageUp || key.pageDown) {
+      useTwmStore.getState().setDetailsScroll(scroll => scroll + (key.pageDown ? 5 : -5));
+      return true;
+    }
     if (input === "q" || key.escape) {
       exit();
       return true;
@@ -406,37 +463,75 @@ export const useTwmInput = ({ exit, controller }: UseTwmInputArgs) => {
       return true;
     }
 
+    if (input === "h" || input === "l") {
+      const starts = items.flatMap((item, index) => index === 0 || item.repoRoot !== items[index - 1]?.repoRoot ? [index] : []);
+      const group = starts.findLastIndex(index => index <= selected);
+      const target = starts[group + (input === "l" ? 1 : -1)];
+      if (target !== undefined) useTwmStore.getState().setSelected(target);
+      return true;
+    }
+
     if (key.return) {
+      if (blockCachedAction()) return true;
       const current = items[selected];
-      if (current?.kind === "worktree") {
-        openItem(current.path);
-        exit();
+      if (current?.kind === "worktree" && current.available) {
+        try {
+          openItem(current.path);
+          const pending = useTwmStore.getState().removingPaths.length;
+          if (useTwmStore.getState().closeOnOpen && !pending) exit();
+          else {
+            void controller.refreshLiveState();
+            setState(state => ({ ...state, message: `Opened ${current.name}.${pending ? " Keeping twm open until queued removals finish." : ""}` }));
+          }
+        } catch {
+          setState(state => ({ ...state, message: "Could not open tmux session. Check tmux and layout.sh." }));
+        }
       }
       return true;
     }
 
     if (input === "r") {
       const current = items[selected];
-      if (current?.kind === "worktree") {
-        refreshItems(`Refreshed ${current.name}`);
-        refreshPreview(current.path);
+      void refreshItems(current ? `Refreshed ${current.name}` : "Refreshed sources").then(applied => {
+        if (applied && current?.kind === "worktree") refreshPreview(current.path);
+      });
+      return true;
+    }
+
+    if (input === "a") {
+      if (blockCachedAction()) return true;
+      const current = items[selected];
+      if (current?.kind !== "worktree" || !current.available) return true;
+      try {
+        if (current.hasSession) throw new Error("This checkout already has a tmux session");
+        const sessions = listUnassignedSessions(items.filter(item => item.kind === "worktree").map(item => item.sessionName));
+        if (!sessions.length) throw new Error("No unassigned tmux sessions available");
+        setState(state => ({ ...state, message: "", dialog: { kind: "assign", targetPath: current.path, sessions, selected: 0 } }));
+      } catch (error) {
+        setState(state => ({ ...state, message: error instanceof Error ? error.message : String(error) }));
       }
       return true;
     }
 
     if (input === "d") {
+      if (blockCachedAction()) return true;
       if (items[selected]?.kind === "worktree") {
         setState((current) => ({
           ...current,
-          dialog: { kind: "confirm", mode: "kill" },
+          dialog: { kind: "confirm", mode: "kill", targetPath: items[selected]!.path, targetName: items[selected]!.name },
         }));
       }
       return true;
     }
 
     if (input === "x") {
+      if (blockCachedAction()) return true;
       const current = items[selected];
       if (current?.kind === "worktree") {
+        if (!current.available) {
+          setState(state => ({ ...state, message: "Worktree directory is unavailable. Restore it before removing." }));
+          return true;
+        }
         if (current.isPrimary) {
           setState((currentState) => ({
             ...currentState,
@@ -449,10 +544,12 @@ export const useTwmInput = ({ exit, controller }: UseTwmInputArgs) => {
           return true;
         }
 
+        const requestGeneration = inputGeneration.current;
         void (async () => {
           const blockedReason = await removalBlockedReason(current.path);
           setState((currentState) => {
-            if (currentState.items[currentState.selected]?.path !== current.path) {
+            if (inputGeneration.current !== requestGeneration || currentState.dialog.kind !== "none" ||
+                currentState.items[currentState.selected]?.path !== current.path) {
               return currentState;
             }
 
@@ -464,7 +561,7 @@ export const useTwmInput = ({ exit, controller }: UseTwmInputArgs) => {
                     title: "Can't remove this worktree",
                     message: blockedReason,
                   }
-                : { kind: "confirm", mode: "remove" },
+                : { kind: "confirm", mode: "remove", targetPath: current.path, targetName: current.name },
             };
           });
         })();
@@ -473,13 +570,18 @@ export const useTwmInput = ({ exit, controller }: UseTwmInputArgs) => {
     }
 
     if (input === "c") {
+      if (blockCachedAction()) return true;
+      if (!items[selected]?.available) return true;
       setState((current) => ({
         ...current,
         dialog: {
           kind: "create",
+          sourcePath: items[selected]!.path,
           worktreeName: "",
           branchName: "",
+          baseRef: "",
           field: "worktreeName",
+          sessionMode: "none",
         },
         message: "",
       }));
@@ -490,7 +592,55 @@ export const useTwmInput = ({ exit, controller }: UseTwmInputArgs) => {
   };
 
   useInput((input, key) => {
-    if (loading || dialog.kind === "running") {
+    inputGeneration.current++;
+    if (key.ctrl && input === "c") {
+      if (useTwmStore.getState().removingPaths.length) setState(state => ({ ...state, message: "Removals pending; wait before closing." }));
+      else exit();
+      return;
+    }
+    if (loading) {
+      if (input === "q" || key.escape) exit();
+      return;
+    }
+    if (dialog.kind === "running") return;
+    const pending = useTwmStore.getState().removingPaths;
+    if (pending.length && dialog.kind === "none") {
+      if (key.escape || input === "q") {
+        setState(state => ({ ...state, message: "Removals pending; wait before closing." }));
+        return;
+      }
+      if (["c", "d", "a", "r"].includes(input) || view === "sources" && input === "x") {
+        setState(state => ({ ...state, message: "Removals pending; opening other worktrees and queueing removals is available. Other changes wait." }));
+        return;
+      }
+      if (view === "worktrees" && (key.return || input === "x") && pending.includes(items[selected]?.path ?? "")) {
+        setState(state => ({ ...state, message: "This worktree is already queued for removal." }));
+        return;
+      }
+    }
+
+    if (dialog.kind === "assign") {
+      if (key.escape || input === "q") cancelDialog();
+      else if (key.downArrow || input === "j" || key.upArrow || input === "k") {
+        const delta = key.downArrow || input === "j" ? 1 : -1;
+        setState(state => state.dialog.kind === "assign" ? { ...state, dialog: { ...state.dialog,
+          selected: Math.max(0, Math.min(state.dialog.sessions.length - 1, state.dialog.selected + delta)) } } : state);
+      } else if (key.return) {
+        try {
+          const session = dialog.sessions[dialog.selected];
+          if (!session) return;
+          const latest = useTwmStore.getState();
+          if (latest.cachedList) throw new Error("Wait for fresh repository state before assigning");
+          const target = latest.items.find(item => item.path === dialog.targetPath && item.kind === "worktree" && item.available);
+          if (!target) throw new Error("Checkout is no longer available");
+          assignSession(target.path, session, latest.items.filter(item => item.kind === "worktree").map(item => item.sessionName));
+          refreshPreview(target.path);
+          setState(state => ({ ...state, dialog: { kind: "none" }, message: `Assigned ${session.name} to ${target.name}.` }));
+          void controller.refreshLiveState();
+        } catch (error) {
+          setState(state => ({ ...state, dialog: { kind: "none" }, message: error instanceof Error ? error.message : String(error) }));
+        }
+      }
       return;
     }
 

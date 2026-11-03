@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { sourcesFile, sourcesFileHeader } from "../config";
-import { runCommandSync } from "./commands";
+import { runCommand } from "./commands";
 import type { SourceEntry } from "../types";
 
 export const formatPath = (itemPath: string): string => {
@@ -25,7 +25,7 @@ export const expandPath = (inputPath: string): string => {
   return inputPath;
 };
 
-export const parseSourceEntry = (line: string): SourceEntry => {
+export const parseSourceEntry = async (line: string): Promise<SourceEntry> => {
   const trimmed = line.trim();
   const match = trimmed.match(/^(parent|scan)\s+(.+)$/);
   const sourcePath = match?.[2] ?? trimmed;
@@ -46,14 +46,17 @@ export const parseSourceEntry = (line: string): SourceEntry => {
     };
   }
 
-  const repoRootResult = runCommandSync([
+  const repoRootResult = await runCommand([
     "git",
     "-C",
     resolvedPath,
     "rev-parse",
+    "--path-format=absolute",
     "--show-toplevel",
+    "--git-dir",
+    "--git-common-dir",
   ]);
-  const repoRoot = repoRootResult.stdout.trim();
+  const [repoRoot = "", gitDir = "", commonDir = ""] = repoRootResult.stdout.trim().split("\n");
   const valid = repoRootResult.success && path.resolve(repoRoot) === resolvedPath;
 
   return {
@@ -63,22 +66,29 @@ export const parseSourceEntry = (line: string): SourceEntry => {
     exists: true,
     valid,
     issue: valid ? "" : "not a git repo root",
+    commonDir,
+    isPrimary: Boolean(gitDir && gitDir === commonDir),
   };
 };
 
-export const loadSources = (): SourceEntry[] => {
+export const loadSources = async (): Promise<SourceEntry[]> => {
   fs.mkdirSync(path.dirname(sourcesFile), { recursive: true });
 
   if (!fs.existsSync(sourcesFile)) {
     return [];
   }
 
-  return fs
-    .readFileSync(sourcesFile, "utf8")
-    .split("\n")
-    .map((line) => line.trim())
-    .filter((line) => line.length > 0 && !line.startsWith("#"))
-    .map(parseSourceEntry);
+  const lines = fs.readFileSync(sourcesFile, "utf8").split("\n")
+    .map(line => line.trim()).filter(line => line && !line.startsWith("#"));
+  const entries: SourceEntry[] = new Array(lines.length);
+  let cursor = 0;
+  await Promise.all(Array.from({ length: Math.min(3, lines.length) }, async () => {
+    while (cursor < lines.length) {
+      const index = cursor++;
+      entries[index] = await parseSourceEntry(lines[index]!);
+    }
+  }));
+  return entries;
 };
 
 export const writeSources = (entries: SourceEntry[]) => {

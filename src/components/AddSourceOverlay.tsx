@@ -7,12 +7,14 @@ type AddSourceOverlayProps = {
   rootHeight: number;
   isSplit: boolean;
   value: string;
+  cursor?: number;
 };
 
 export const AddSourceOverlay = ({
   rootHeight,
   isSplit,
   value,
+  cursor,
 }: AddSourceOverlayProps) => (
   <DialogFrame
     rootHeight={rootHeight}
@@ -22,6 +24,6 @@ export const AddSourceOverlay = ({
     subtitle="Add a repository root so its linked worktrees can appear in the picker."
     footer="enter add • esc cancel"
   >
-    <AddSourceDialog value={value} />
+    <AddSourceDialog value={value} cursor={cursor} />
   </DialogFrame>
 );

@@ -1,31 +1,12 @@
 import React from "react";
 import { Box, Text } from "ink";
 import { theme } from "../theme";
-import type { Item, OverwatchMatch } from "../types";
+import type { Item } from "../types";
 import { Spinner } from "./Spinner";
-
-const badgeForOverwatch = (match: OverwatchMatch | undefined) => {
-  if (!match) {
-    return null;
-  }
-
-  const agents = match.kind === "single" ? [match.agent] : match.agents;
-  const onlineAgents = agents.filter((agent) => agent.status !== "offline");
-
-  if (onlineAgents.length === 0) {
-    return null;
-  }
-
-  if (onlineAgents.some((agent) => agent.status === "working")) {
-    return { kind: "working", color: theme.colors.accent } as const;
-  }
-
-  if (onlineAgents.every((agent) => agent.status === "done")) {
-    return { kind: "done", color: theme.colors.success } as const;
-  }
-
-  return { kind: "other", color: theme.colors.muted } as const;
-};
+import { useTwmStore } from "../store";
+import { matchPullRequestForBranch } from "../lib/pullRequests";
+import { AgentStatus } from "./AgentStatus";
+import { PullRequestNumber } from "./PullRequestNumber";
 
 type WorktreeRowProps = {
   item: Item;
@@ -40,7 +21,9 @@ const WorktreeRow = React.memo(({
   isSelected,
   isFirstVisibleRow,
 }: WorktreeRowProps) => {
-  const overwatchBadge = badgeForOverwatch(item.overwatch);
+  const data = useTwmStore(state => state.pullRequests[item.repoRoot]);
+  const pr = data?.status === "ready" ? matchPullRequestForBranch(data, item.branch) : null;
+  const removalIndex = useTwmStore(state => state.removingPaths.indexOf(item.path));
 
   return (
     <Box
@@ -84,24 +67,14 @@ const WorktreeRow = React.memo(({
           {item.kind === "worktree" && item.isPrimary ? (
             <Text color={theme.colors.muted}> primary</Text>
           ) : null}
-          {item.hasSession ? (
-            <Text color={isSelected ? theme.colors.accent : theme.colors.muted}>
-              {" "}
-              ●
-            </Text>
-          ) : null}
         </Box>
-        {overwatchBadge ? (
-          <Box>
-            <Text color={overwatchBadge.color}>{" π"}</Text>
-            {overwatchBadge.kind === "working" ? (
-              <Spinner color="cyan" />
-            ) : null}
-            {overwatchBadge.kind === "done" ? (
-              <Text color={overwatchBadge.color}>✓</Text>
-            ) : null}
-          </Box>
-        ) : null}
+        <Box flexShrink={0}>
+          {removalIndex >= 0 ? <Text color={theme.colors.warning}>{removalIndex === 0 ? " Removing…" : " Queued…"}</Text> : null}
+          {!item.available ? <Text color={theme.colors.muted}> unavailable</Text> : item.locked ? <Text color={theme.colors.muted}> locked</Text> : null}
+          {item.agentPanes?.length ? <Text> <AgentStatus panes={item.agentPanes} compact /></Text> : null}
+          <Box width={2} justifyContent="flex-end">{pr?.status === "matched" ? <PullRequestNumber {...pr.pullRequest} dot /> : null}</Box>
+          <Box width={2} justifyContent="flex-end">{item.hasSession ? <Text color={theme.colors.muted}>T</Text> : null}</Box>
+        </Box>
       </Box>
     </Box>
   );

@@ -1,13 +1,14 @@
-import React, { useMemo } from "react";
+import React, { useEffect, useMemo } from "react";
+import path from "node:path";
 import { Box, Text } from "ink";
-import { overwatchEnabled } from "./config";
 import { theme } from "./theme";
 import { currentVersion } from "./version";
 import type { Item, SourceEntry, ViewMode } from "./types";
 import { formatPath } from "./lib/sources";
-import { suggestedCreateTargetDir } from "./lib/actions";
+import { freshChildState } from "./lib/agents";
 import { useTwmStore } from "./store";
 import { AddSourceOverlay } from "./components/AddSourceOverlay";
+import { AssignSessionOverlay } from "./components/AssignSessionOverlay";
 import { ConfirmOverlay } from "./components/ConfirmOverlay";
 import { CreateWorktreeOverlay } from "./components/CreateWorktreeOverlay";
 import { NoticeOverlay } from "./components/NoticeOverlay";
@@ -16,6 +17,9 @@ import { SidebarTabs } from "./components/SidebarTabs";
 import { SourceDetails } from "./components/SourceDetails";
 import { SourceSidebar } from "./components/SourceSidebar";
 import { PiDetails } from "./components/PiDetails";
+import { KeyHint, type KeyHintItem } from "./components/KeyHint";
+import { PullRequestDetails } from "./components/PullRequestDetails";
+import { DetailsViewport } from "./components/DetailsViewport";
 import { WorktreeDetails } from "./components/WorktreeDetails";
 import { WorktreeEmptyState } from "./components/WorktreeEmptyState";
 import { WorktreeSidebar } from "./components/WorktreeSidebar";
@@ -102,12 +106,8 @@ const useCreateTargetPath = (current?: Item) => {
       return "";
     }
 
-    return suggestedCreateTargetDir(
-      current.path,
-      dialog.kind === "create"
-        ? dialog.worktreeName || "<worktree>"
-        : "<worktree>",
-    );
+    return path.join(current.createRoot,
+      dialog.kind === "create" ? dialog.worktreeName || "<worktree>" : "<worktree>");
   }, [current?.path, current?.kind, dialog.kind, dialog.kind === "create" ? dialog.worktreeName : ""]);
 };
 
@@ -136,7 +136,7 @@ export const SidebarPane = ({
   return (
     <Box
       flexDirection="column"
-      width={isSplit ? "33%" : undefined}
+      width={isSplit ? "38%" : undefined}
       flexGrow={isSplit ? 0 : 1}
       height={mainPanelsHeight}
       overflow="hidden"
@@ -177,26 +177,38 @@ export const DetailsPane = ({
   const currentSource = useTwmStore((state) => state.sources[state.selectedSource]);
   const dialog = useTwmStore((state) => state.dialog);
   const preview = useTwmStore((state) => state.preview);
+  const pullRequests = useTwmStore(state => current ? state.pullRequests[current.repoRoot] : undefined);
   const previewPathRaw = useTwmStore((state) => state.previewPath);
   const previewLoading = useTwmStore((state) => state.previewLoading);
   const createTargetPath = useCreateTargetPath(current);
+  const cachedPreview = useTwmStore(state => state.cachedPreviewPaths.includes(current?.path ?? ""));
+  const cachedPrs = useTwmStore(state => state.cachedPrRoots.includes(current?.repoRoot ?? ""));
   const showPiPane =
-    overwatchEnabled && view === "worktrees" && current?.kind === "worktree";
-  const piHeight = showPiPane
-    ? Math.max(4, Math.floor(mainPanelsHeight * 0.35))
-    : 0;
-  const detailsHeight = showPiPane
-    ? Math.max(3, mainPanelsHeight - piHeight)
-    : mainPanelsHeight;
+    view === "worktrees" && current?.kind === "worktree" && Boolean(current.agentPanes?.length || current.agentUnavailable);
+  // Independent grid panel: compact for one pane, bounded on short terminals
+  // so PR/Git details retain usable space. Details scrolling never moves it.
+  // Reserve status/prompt/reply slots even before messages arrive, avoiding
+  // a collapsed box that makes missing reporter data look like a layout bug.
+  const paneCount = current?.agentPanes?.length ?? 0;
+  const agentRows = (current?.agentUnavailable ? 1 : 0) + paneCount * 3 + (current?.agentPanes?.filter(pane => freshChildState(pane) === "active").length ?? 0) + Math.max(0, paneCount - 1);
+  const compactPanels = mainPanelsHeight < 8;
+  const minimumPanelHeight = compactPanels ? 3 : 4;
+  const agentHeight = showPiPane ? Math.min((compactPanels ? 2 : 3) + agentRows,
+    Math.max(0, mainPanelsHeight - minimumPanelHeight)) : 0;
+  const detailsHeight = mainPanelsHeight - agentHeight;
+  useEffect(() => { useTwmStore.getState().setDetailsScroll(0); }, [current?.path, view]);
   const previewMatchesCurrent = current?.kind === "worktree"
     ? previewPathRaw === current.path && !previewLoading
     : false;
   const effectivePreview = previewMatchesCurrent ? preview : null;
-  const showPreviewLoading = current?.kind === "worktree" ? !effectivePreview : false;
+  const showPreviewLoading = current?.kind === "worktree" && current.available ? !effectivePreview : false;
   const previewPath = effectivePreview?.path
     ? formatPath(effectivePreview.path)
     : formatPath(current?.path ?? "");
   const previewMetaRows = [
+    current?.kind === "worktree" && !current.available
+      ? { label: "Status", value: "directory unavailable" } : null,
+    current?.locked ? { label: "Lock", value: "worktree locked" } : null,
     current?.kind === "worktree" && current.isPrimary
       ? { label: "Role", value: "primary checkout" }
       : null,
@@ -204,7 +216,7 @@ export const DetailsPane = ({
       ? { label: "Branch", value: effectivePreview.branch }
       : null,
     effectivePreview?.base
-      ? { label: "Base", value: effectivePreview.base }
+      ? { label: "Upstream", value: effectivePreview.base }
       : null,
     effectivePreview?.track
       ? { label: "Track", value: effectivePreview.track }
@@ -215,6 +227,8 @@ export const DetailsPane = ({
     effectivePreview?.tmux
       ? { label: "Tmux", value: effectivePreview.tmux }
       : null,
+    current?.kind === "worktree" && current.hasSession
+      ? { label: "Session", value: current.sessionName } : null,
     effectivePreview?.last
       ? { label: "Last", value: effectivePreview.last }
       : null,
@@ -228,7 +242,7 @@ export const DetailsPane = ({
   return (
     <Box
       flexDirection="column"
-      width={isSplit ? "67%" : undefined}
+      width={isSplit ? "62%" : undefined}
       flexGrow={1}
       height={mainPanelsHeight}
       overflow="hidden"
@@ -236,16 +250,21 @@ export const DetailsPane = ({
       <Box
         flexDirection="column"
         height={detailsHeight}
+        flexShrink={0}
         overflow="hidden"
         borderStyle="round"
         borderColor={theme.colors.border}
         paddingX={1}
       >
-        <Box marginBottom={1}>
+        {!compactPanels ? <Box>
           <Text color={theme.colors.primary}>
             {view === "worktrees" ? "Details" : "Source details"}
           </Text>
-        </Box>
+        </Box> : null}
+        <DetailsViewport height={Math.max(1, detailsHeight - 4)}>
+        {view === "worktrees" && (cachedPreview || cachedPrs) ? (
+          <Text color={theme.colors.muted}>Cached {cachedPreview && cachedPrs ? "Git/PR" : cachedPreview ? "Git" : "PR"} state · syncing…</Text>
+        ) : null}
         {view === "worktrees" ? (
           current ? (
             current.kind === "source-empty" ? (
@@ -262,6 +281,7 @@ export const DetailsPane = ({
                 previewMetaRows={previewMetaRows}
                 previewChanges={previewChanges}
                 hiddenPreviewChanges={hiddenPreviewChanges}
+                pullRequestDetails={<PullRequestDetails branch={effectivePreview?.branch || current.branch} data={pullRequests} />}
               />
             )
           ) : (
@@ -273,25 +293,15 @@ export const DetailsPane = ({
             formatPath={formatPath}
           />
         )}
+        </DetailsViewport>
       </Box>
-
-      {showPiPane ? (
-        <Box
-          flexDirection="column"
-          height={piHeight}
-          overflow="hidden"
-          borderStyle="round"
-          borderColor={theme.colors.border}
-          paddingX={1}
-        >
-          <Box marginBottom={1}>
-            <Text color={theme.colors.primary}>Pi Overwatch</Text>
-          </Box>
-          {current ? (
-            <PiDetails current={current} />
-          ) : null}
+      {showPiPane && current ? <Box flexDirection="column" height={agentHeight} flexShrink={0}
+        overflow="hidden" borderStyle="round" borderColor={theme.colors.border} paddingX={1}>
+        {!compactPanels ? <Text color={theme.colors.primary}>Agent status</Text> : null}
+        <Box flexDirection="column" height={Math.max(1, agentHeight - (compactPanels ? 2 : 3))} flexShrink={0} overflow="hidden">
+          <PiDetails current={current} rows={Math.max(1, agentHeight - (compactPanels ? 2 : 3))} />
         </Box>
-      ) : null}
+      </Box> : null}
     </Box>
   );
 };
@@ -305,7 +315,10 @@ export const StatusLine = ({ statusBoxHeight }: StatusLineProps) => {
   const dialog = useTwmStore((state) => state.dialog);
   const view = useTwmStore((state) => state.view);
   const updateAvailableVersion = useTwmStore((state) => state.updateAvailableVersion);
-  const baseStatus = message
+  const loading = useTwmStore(state => state.loading);
+  const syncing = useTwmStore(state => state.syncing);
+  const cachedList = useTwmStore(state => state.cachedList);
+  const baseStatus = loading ? "Loading repositories…" : syncing ? cachedList ? "Syncing… cached list is navigable; actions wait for fresh state." : "Syncing repositories…" : message
     ? message
     : dialog.kind === "running"
       ? dialog.label || "Working…"
@@ -366,33 +379,25 @@ type HelpLineProps = {
 export const HelpLine = ({ keybindLegendHeight }: HelpLineProps) => {
   const view = useTwmStore((state) => state.view);
   const current = useCurrentItem();
-  const worktreeLegend =
-    current?.kind === "source-empty"
-      ? "tab sources • j/k move • c create first worktree • q quit"
-      : current?.kind === "worktree"
-        ? [
-            "tab sources",
-            "j/k move",
-            "enter open",
-            "r refresh",
-            "c create worktree",
-            current.hasSession ? "d close tmux" : null,
-            current.isPrimary ? null : "x remove worktree",
-            "q quit",
-          ]
-            .filter((part): part is string => part !== null)
-            .join(" • ")
-        : "tab sources • j/k move • q quit";
+  const keys: KeyHintItem[] = view === "sources" ? [
+    { key: "tab", label: "worktrees" }, { key: "j/k", label: "move" },
+    { key: "a", label: "add source" }, { key: "x", label: "remove source" }, { key: "q", label: "quit" },
+  ] : [
+    { key: "tab", label: "sources" }, { key: "j/k", label: "move" },
+    { key: "h/l", label: "source" },
+    ...(current?.kind === "source-empty" ? [{ key: "c", label: "create first worktree" }]
+      : current?.kind === "worktree" ? [
+        { key: "enter", label: "open" },
+        { key: "r", label: "refresh" }, { key: "c", label: "create" }, { key: "pgup/pgdn", label: "scroll" },
+        ...(current.hasSession ? [{ key: "d", label: "close tmux" }] : current.available ? [{ key: "a", label: "assign tmux" }] : []),
+        ...(current.isPrimary ? [] : [{ key: "x", label: "remove" }]),
+      ] : []),
+    { key: "q", label: "quit" },
+  ];
 
-  return (
-    <Box paddingX={1} flexDirection="column" minHeight={keybindLegendHeight}>
-      <Text color={theme.colors.secondary}>
-        {view === "worktrees"
-          ? worktreeLegend
-          : "tab worktrees • j/k move • a add source • x remove source • q quit"}
-      </Text>
-    </Box>
-  );
+  return <Box width="100%" paddingX={1} flexDirection="column" height={keybindLegendHeight} flexShrink={0} overflow="hidden">
+    <KeyHint keys={keys} />
+  </Box>;
 };
 
 type DialogOverlayProps = {
@@ -405,18 +410,23 @@ export const DialogOverlay = ({
   isSplit,
 }: DialogOverlayProps) => {
   const dialog = useTwmStore((state) => state.dialog);
-  const current = useCurrentItem();
+  const selectedItem = useCurrentItem();
+  const items = useTwmStore(state => state.items);
+  const current = dialog.kind === "create" ? items.find(item => item.path === dialog.sourcePath) : selectedItem;
   const createTargetPath = useCreateTargetPath(current);
 
   switch (dialog.kind) {
     case "none":
       return null;
+    case "assign":
+      return <AssignSessionOverlay rootHeight={rootHeight} isSplit={isSplit} sessions={dialog.sessions} selected={dialog.selected} />;
     case "add-source":
       return (
         <AddSourceOverlay
           rootHeight={rootHeight}
           isSplit={isSplit}
           value={dialog.value}
+          cursor={dialog.cursor}
         />
       );
     case "create":
@@ -427,7 +437,10 @@ export const DialogOverlay = ({
           current={current}
           worktreeName={dialog.worktreeName}
           branchName={dialog.branchName}
+          baseRef={dialog.baseRef}
           activeField={dialog.field}
+          sessionMode={dialog.sessionMode}
+          cursor={dialog.cursor}
           createTargetPath={createTargetPath}
         />
       );
@@ -437,7 +450,7 @@ export const DialogOverlay = ({
           rootHeight={rootHeight}
           isSplit={isSplit}
           mode={dialog.mode}
-          currentName={current?.name}
+          currentName={dialog.targetName}
         />
       );
     case "notice":

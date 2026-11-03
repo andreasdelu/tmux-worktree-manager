@@ -1,5 +1,6 @@
 import React from "react";
 import { theme } from "../theme";
+import { DialogActions } from "./DialogActions";
 import { DialogFrame } from "./DialogFrame";
 
 type ConfirmOverlayProps = {
@@ -29,7 +30,9 @@ export const ConfirmOverlay = ({
       borderColor={theme.colors.warning}
       title={title}
       subtitle={subtitle}
-      footer="y confirm • n cancel • esc close"
-    />
+      footer="y confirm • enter / n / esc cancel"
+    >
+      <DialogActions />
+    </DialogFrame>
   );
 };

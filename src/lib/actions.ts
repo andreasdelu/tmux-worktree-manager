@@ -1,23 +1,44 @@
 import fs from "node:fs";
 import path from "node:path";
-import { runCommand, runCommandSync } from "./commands";
+import { runCommand, runCommandSync, stripAnsi } from "./commands";
+import { isValidBranchName } from "./branchInput";
 import {
-  createSession,
+  ensureSessionFor,
   enterSession,
-  hasTmuxSession,
-  hasTmuxSessionAsync,
-  sessionNameFor,
+  sessionForAsync,
 } from "./session";
-import type { ActionMode } from "../types";
+import type { ActionMode, CreateSessionMode } from "../types";
+
+const errorDetail = (value: string) =>
+  stripAnsi(value)
+    .replace(/\x1B\][^\x07\x1B]*(?:\x07|\x1B\\)/g, "")
+    .replace(/[\p{Cc}\p{Cf}]/gu, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 240);
+
+const commandFailure = (message: string, stderr: string) => {
+  const detail = errorDetail(stderr);
+  return detail ? `${message}: ${detail}` : message;
+};
+
+const checkedGitPath = (
+  dir: string,
+  result: { success: boolean; stdout: string; stderr: string },
+) => {
+  const raw = result.stdout.trim();
+  if (!result.success || !raw) {
+    throw new Error(commandFailure("Couldn't inspect Git worktree", result.stderr));
+  }
+  return path.resolve(dir, raw);
+};
 
 const gitPathForDir = (
   dir: string,
   mode: "--git-dir" | "--git-common-dir",
 ) => {
   const result = runCommandSync(["git", "-C", dir, "rev-parse", mode]);
-  const raw = result.stdout.trim();
-  const resolved = path.isAbsolute(raw) ? raw : path.resolve(dir, raw);
-  return path.resolve(resolved);
+  return checkedGitPath(dir, result);
 };
 
 const gitPathForDirAsync = async (
@@ -25,9 +46,7 @@ const gitPathForDirAsync = async (
   mode: "--git-dir" | "--git-common-dir",
 ) => {
   const result = await runCommand(["git", "-C", dir, "rev-parse", mode]);
-  const raw = result.stdout.trim();
-  const resolved = path.isAbsolute(raw) ? raw : path.resolve(dir, raw);
-  return path.resolve(resolved);
+  return checkedGitPath(dir, result);
 };
 
 export const isPrimaryWorktree = (dir: string) =>
@@ -39,9 +58,6 @@ export const isPrimaryWorktreeAsync = async (dir: string) =>
 
 const mainRepoForDir = (dir: string) =>
   path.dirname(gitPathForDir(dir, "--git-common-dir"));
-
-const mainRepoForDirAsync = async (dir: string) =>
-  path.dirname(await gitPathForDirAsync(dir, "--git-common-dir"));
 
 const defaultWorktreeRootForRepo = (repoRoot: string) =>
   path.join(path.dirname(repoRoot), `${path.basename(repoRoot)}-worktrees`);
@@ -63,139 +79,209 @@ const suggestedCreateTargetRoot = (dir: string) => {
   return targetRoot;
 };
 
+const createTargetDir = (root: string, worktreeName: string) => {
+  if (
+    !worktreeName.trim() ||
+    worktreeName === "." ||
+    worktreeName === ".." ||
+    !/^[A-Za-z0-9._-]+$/.test(worktreeName)
+  ) {
+    throw new Error("Invalid worktree folder name: use letters, digits, dots, underscores or hyphens.");
+  }
+
+  const targetDir = path.resolve(root, worktreeName);
+  if (path.dirname(targetDir) !== path.resolve(root)) {
+    throw new Error("Worktree folder must stay inside the worktree root.");
+  }
+  return targetDir;
+};
+
 export const suggestedCreateTargetDir = (dir: string, worktreeName: string) =>
-  path.join(suggestedCreateTargetRoot(dir), worktreeName);
+  createTargetDir(suggestedCreateTargetRoot(dir), worktreeName);
+
+// Preserve launch-origin protection and also inspect the exact invoking client
+// after retained popup navigation. Never substitute tmux's most-recent client.
+const protectedSessions = async (): Promise<string[]> => {
+  const origin = process.env.TWM_ORIGIN_SESSION || process.env.TMUX_PANE;
+  const result = await runCommand(["tmux", "display-message", "-p", ...(origin ? ["-t", origin] : []), "#{session_id}"]);
+  if (!result.success || !/^\$\d+$/.test(result.stdout.trim())) throw new Error(commandFailure("Couldn't identify current tmux session", result.stderr));
+  const sessions = [result.stdout.trim()];
+  if (process.env.TWM_ORIGIN_CLIENT) {
+    const clients = await runCommand(["tmux", "list-clients", "-F", "#{client_name}\t#{session_id}"]);
+    const matches = clients.stdout.split("\n").map(line => line.split("\t")).filter(([name]) => name === process.env.TWM_ORIGIN_CLIENT);
+    if (!clients.success || matches.length !== 1 || !/^\$\d+$/.test(matches[0]?.[1] ?? "")) throw new Error(commandFailure("Couldn't identify invoking tmux client's session", clients.stderr));
+    sessions.push(matches[0][1]);
+  }
+  return sessions;
+};
 
 export const removalBlockedReason = async (
   itemPath: string,
 ): Promise<string | null> => {
-  const sessionName = sessionNameFor(itemPath);
+  try {
+    if (await isPrimaryWorktreeAsync(itemPath)) {
+      return "This is the primary checkout, so twm won't remove it.";
+    }
 
-  if (await isPrimaryWorktreeAsync(itemPath)) {
-    return "This is the primary checkout, so twm won't remove it.";
+    const status = await runCommand([
+      "git", "-C", itemPath, "status", "--porcelain",
+      "--untracked-files=all", "--ignore-submodules=none",
+    ]);
+    if (!status.success) {
+      return commandFailure("Couldn't check worktree changes; removal blocked", status.stderr);
+    }
+    if (status.stdout.trim()) {
+      return "This worktree has uncommitted changes. Commit, stash, or discard them first, then try again.";
+    }
+
+    const session = await sessionForAsync(itemPath);
+    if (process.env.TMUX) {
+      if (session && (await protectedSessions()).includes(session.id)) {
+        return "You're currently inside this worktree's tmux session, so twm won't remove it.";
+      }
+    }
+
+    return null;
+  } catch (error) {
+    return commandFailure("Removal blocked", error instanceof Error ? error.message : String(error));
   }
-
-  if ((await runCommand(["git", "-C", itemPath, "status", "--porcelain"])).stdout.trim()) {
-    return "This worktree has uncommitted changes. Commit, stash, or discard them first, then try again.";
-  }
-
-  const currentSession = (
-    await runCommand(["tmux", "display-message", "-p", "#S"])
-  ).stdout.trim();
-
-  if (process.env.TMUX && sessionName === currentSession) {
-    return "You're currently inside this worktree's tmux session, so twm won't remove it.";
-  }
-
-  return null;
 };
 
 export const performAction = async (
   mode: ActionMode,
   itemPath: string,
 ): Promise<string> => {
-  const sessionName = sessionNameFor(itemPath);
-
   if (mode === "kill") {
-    if (!(await hasTmuxSessionAsync(sessionName))) {
+    let session;
+    try { session = await sessionForAsync(itemPath); }
+    catch (error) { return commandFailure("Closing blocked", error instanceof Error ? error.message : String(error)); }
+    if (!session) {
       return `No tmux session for ${path.basename(itemPath)}`;
     }
 
-    const currentSession = (
-      await runCommand(["tmux", "display-message", "-p", "#S"])
-    ).stdout.trim();
-
-    if (process.env.TMUX && sessionName === currentSession) {
-      return "Won't close the current tmux session";
+    if (process.env.TMUX) {
+      try {
+        if ((await protectedSessions()).includes(session.id)) {
+          return "Won't close the current tmux session";
+        }
+      } catch (error) {
+        return commandFailure("Closing blocked", error instanceof Error ? error.message : String(error));
+      }
     }
 
-    const killed = await runCommand(["tmux", "kill-session", "-t", sessionName]);
+    const killed = await runCommand(["tmux", "kill-session", "-t", session.id]);
     return killed.success
       ? `Closed tmux session for ${path.basename(itemPath)}`
       : `Failed to close tmux session for ${path.basename(itemPath)}`;
   }
 
+  // Repeat the checks at execution time, even if the UI checked before confirming.
   const blockedReason = await removalBlockedReason(itemPath);
   if (blockedReason) {
     return blockedReason;
   }
 
-  if (await hasTmuxSessionAsync(sessionName)) {
-    await runCommand(["tmux", "kill-session", "-t", sessionName]);
+  let session;
+  try {
+    session = await sessionForAsync(itemPath);
+    if (session && process.env.TMUX && (await protectedSessions()).includes(session.id)) {
+      return "You're currently inside this worktree's tmux session, so twm won't remove it.";
+    }
+    const removed = await runCommand([
+      "git", "-C", itemPath, "worktree", "remove", itemPath,
+    ]);
+    if (!removed.success) {
+      return commandFailure(`Failed to remove worktree ${path.basename(itemPath)}`, removed.stderr);
+    }
+  } catch (error) {
+    return commandFailure("Failed to remove worktree", error instanceof Error ? error.message : String(error));
   }
 
-  const mainRepo = await mainRepoForDirAsync(itemPath);
-  const removed = await runCommand([
-    "git",
-    "-C",
-    mainRepo,
-    "worktree",
-    "remove",
-    itemPath,
-  ]);
-  return removed.success
-    ? `Removed worktree ${path.basename(itemPath)}`
-    : `Failed to remove worktree ${path.basename(itemPath)}`;
-};
-
-export const openItem = (itemPath: string) => {
-  const sessionName = sessionNameFor(itemPath);
-
-  if (!hasTmuxSession(sessionName)) {
-    createSession(sessionName, itemPath);
+  const message = `Removed worktree ${path.basename(itemPath)}`;
+  // Preserve the session when Git refuses removal (including changes made after checking).
+  try {
+    if (session) {
+      const killed = await runCommand(["tmux", "kill-session", "-t", session.id]);
+      if (!killed.success) {
+        return commandFailure(`${message}; failed to close tmux session`, killed.stderr);
+      }
+    }
+  } catch (error) {
+    return commandFailure(`${message}; couldn't check tmux session`, error instanceof Error ? error.message : String(error));
   }
-
-  enterSession(sessionName);
+  return message;
 };
 
-export const createItem = async (
+export const openItem = (itemPath: string) => enterSession(ensureSessionFor(itemPath));
+
+export const createItemResult = async (
   itemPath: string,
   worktreeName: string,
   branchName: string,
-): Promise<string> => {
-  const mainRepo = await mainRepoForDirAsync(itemPath);
-  const targetDir = suggestedCreateTargetDir(itemPath, worktreeName);
+  baseRef?: string,
+  targetRoot?: string,
+  sessionMode: CreateSessionMode = "none",
+): Promise<{ message: string; sessionReady: boolean }> => {
+  const failure = (message: string) => ({ message, sessionReady: false });
+  try {
+    if (!(await isValidBranchName(branchName))) {
+      return failure("Invalid branch name. Use a literal Git branch name.");
+    }
 
-  if (fs.existsSync(targetDir)) {
-    return `Target already exists: ${path.basename(targetDir)}`;
-  }
+    // Git worktree/ref commands share repository state from any linked checkout,
+    // including bare-backed or separate-Git-directory repositories.
+    const mainRepo = itemPath;
+    const root = targetRoot ?? ((await isPrimaryWorktreeAsync(itemPath))
+      ? defaultWorktreeRootForRepo(path.dirname(await gitPathForDirAsync(itemPath, "--git-common-dir")))
+      : path.dirname(itemPath));
+    const targetDir = createTargetDir(root, worktreeName);
+    if (fs.existsSync(targetDir)) {
+      return failure(`Target already exists: ${path.basename(targetDir)}`);
+    }
 
-  fs.mkdirSync(path.dirname(targetDir), { recursive: true });
-
-  const branchExists = (
-    await runCommand([
-      "git",
-      "-C",
-      mainRepo,
-      "show-ref",
-      "--verify",
-      "--quiet",
+    const branch = await runCommand([
+      "git", "-C", mainRepo, "show-ref", "--verify", "--quiet",
       `refs/heads/${branchName}`,
-    ])
-  ).success;
+    ]);
+    if (!branch.success && branch.exitCode !== 1) {
+      return failure(commandFailure("Couldn't check existing branch", branch.stderr));
+    }
+    if (branch.success && baseRef !== undefined) {
+      return failure("Branch already exists; a starting ref can only be used with a new branch.");
+    }
 
-  const createResult = branchExists
-    ? await runCommand([
-        "git",
-        "-C",
-        mainRepo,
-        "worktree",
-        "add",
-        targetDir,
-        branchName,
-      ])
-    : await runCommand([
-        "git",
-        "-C",
-        mainRepo,
-        "worktree",
-        "add",
-        "-b",
-        branchName,
-        targetDir,
+    const args = ["git", "-C", mainRepo, "worktree", "add"];
+    if (branch.success) {
+      args.push(targetDir, branchName);
+    } else {
+      // Resolve from the selected worktree, not the primary checkout's HEAD.
+      const base = await runCommand([
+        "git", "-C", itemPath, "rev-parse", "--verify", "--end-of-options",
+        `${baseRef ?? "HEAD"}^{commit}`,
       ]);
+      const commit = base.stdout.trim();
+      if (!base.success || !/^(?:[0-9a-f]{40}|[0-9a-f]{64})$/i.test(commit)) {
+        return failure(commandFailure("Couldn't resolve starting commit", base.stderr));
+      }
+      args.push("-b", branchName, targetDir, commit);
+    }
 
-  return createResult.success
-    ? `Created worktree ${path.basename(targetDir)}`
-    : `Failed to create worktree ${branchName}`;
+    fs.mkdirSync(path.dirname(targetDir), { recursive: true });
+    const created = await runCommand(args);
+    if (!created.success) return failure(commandFailure(`Failed to create worktree ${errorDetail(branchName)}`, created.stderr));
+    const message = `Created worktree ${path.basename(targetDir)}`;
+    if (sessionMode !== "none") {
+      try {
+        ensureSessionFor(targetDir);
+      } catch (error) {
+        return failure(commandFailure(`${message}; could not create tmux session`, error instanceof Error ? error.message : String(error)));
+      }
+    }
+    return { message, sessionReady: sessionMode !== "none" };
+  } catch (error) {
+    return failure(commandFailure("Failed to create worktree", error instanceof Error ? error.message : String(error)));
+  }
 };
+
+export const createItem = async (...args: Parameters<typeof createItemResult>): Promise<string> =>
+  (await createItemResult(...args)).message;

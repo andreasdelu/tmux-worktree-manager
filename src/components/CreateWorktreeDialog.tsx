@@ -1,55 +1,40 @@
 import React from "react";
 import { Box, Text } from "ink";
+import { TextInput } from "./TextInput";
 import { theme } from "../theme";
 
-type CreateField = "worktreeName" | "branchName";
-
-type CreateWorktreeDialogProps = {
+import type { CreateField, CreateSessionMode } from "../types";
+type Props = {
   worktreeName: string;
   branchName: string;
+  baseRef: string;
+  defaultBase: string;
   activeField: CreateField;
+  sessionMode?: CreateSessionMode;
+  cursor?: number;
   createTargetPath: string;
 };
-
-const fieldBorderColor = (field: CreateField, activeField: CreateField) =>
-  field === activeField ? theme.colors.accent : theme.colors.border;
-
-export const CreateWorktreeDialog = ({
-  worktreeName,
-  branchName,
-  activeField,
-  createTargetPath,
-}: CreateWorktreeDialogProps) => {
-  const effectiveBranchName = branchName || worktreeName;
-
-  return (
-    <Box flexDirection="column" marginTop={1}>
-      <Text color={theme.colors.muted}>Worktree name</Text>
-      <Box
-        borderStyle="round"
-        borderColor={fieldBorderColor("worktreeName", activeField)}
-        paddingX={1}
-      >
-        <Text color={theme.colors.text}>{worktreeName || "_"}</Text>
+export const CreateWorktreeDialog = ({ worktreeName, branchName, baseRef, defaultBase, activeField, cursor, createTargetPath, sessionMode = "none" }: Props) => (
+  <Box flexDirection="column" marginTop={1}>
+    <Text color={theme.colors.muted} wrap="truncate-end">Paste a Linear Git branch: keep branch, suggest issue ID + 4 words.</Text>
+    {([
+      ["worktreeName", "Name", worktreeName],
+      ["branchName", "Branch", branchName],
+      ["baseRef", "Base", baseRef],
+    ] as const).map(([field, label, value]) => (
+      <Box key={field} height={1}>
+        <Text color={activeField === field ? theme.colors.accent : theme.colors.muted}>{`${activeField === field ? "›" : " "} ${label.padEnd(7)} `}</Text>
+        <TextInput value={value} cursor={activeField === field ? cursor : undefined} focus={activeField === field}
+          placeholder={field === "branchName" ? worktreeName : field === "baseRef" ? `(selected: ${defaultBase || "HEAD"})` : "worktree name"} />
       </Box>
-
-      <Box marginTop={1} flexDirection="column">
-        <Text color={theme.colors.muted}>Branch</Text>
-        <Box
-          borderStyle="round"
-          borderColor={fieldBorderColor("branchName", activeField)}
-          paddingX={1}
-        >
-          <Text color={branchName ? theme.colors.text : theme.colors.muted}>
-            {effectiveBranchName || "_"}
-          </Text>
-        </Box>
-      </Box>
-
-      <Box marginTop={1} flexDirection="column">
-        <Text color={theme.colors.muted}>Target path</Text>
-        <Text>{createTargetPath}</Text>
-      </Box>
-    </Box>
-  );
-};
+    ))}
+    {([
+      ["createSession", "Create tmux session", sessionMode !== "none"],
+      ["openSession", "Open after creation", sessionMode === "open"],
+    ] as const).map(([field, label, checked]) => <Text key={field}
+      color={activeField === field ? theme.colors.accent : theme.colors.muted}>
+      {`${activeField === field ? "›" : " "} [${checked ? "x" : " "}] ${label}`}
+    </Text>)}
+    <Text color={theme.colors.muted} wrap="truncate-end">{`Target ${createTargetPath}`}</Text>
+  </Box>
+);

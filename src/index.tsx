@@ -21,7 +21,7 @@ const App = () => {
   const isSplit = terminalColumns >= 110;
   const rootHeight = Math.max(terminalRows, 18);
   const statusBoxHeight = 2;
-  const keybindLegendHeight = 1;
+  const keybindLegendHeight = isSplit ? 2 : 3;
   const mainPanelsHeight = Math.max(
     rootHeight - statusBoxHeight - keybindLegendHeight - 2,
     10,
@@ -76,4 +76,4 @@ if (process.stdout.isTTY) {
   process.stdout.write("\u001b[H");
 }
 
-render(<App />, { alternateScreen: true, incrementalRendering: true });
+render(<App />, { alternateScreen: true, incrementalRendering: true, exitOnCtrlC: false });

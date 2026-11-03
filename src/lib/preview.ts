@@ -1,5 +1,6 @@
+import type { Subprocess } from "bun";
 import { startTextCommand } from "./commands";
-import { sessionNameFor } from "./session";
+import { sessionForAsync } from "./session";
 import type { PreviewData } from "../types";
 
 const parseBranchInfoLine = (line: string) => {
@@ -23,20 +24,14 @@ const parseBranchInfoLine = (line: string) => {
   return { branch: head, base: "", divergence };
 };
 
-const sessionStateForDir = async (dir: string, processes?: Subprocess[]) => {
-  const sessionName = sessionNameFor(dir);
-  const hasSession = startTextCommand(
-    ["tmux", "has-session", "-t", sessionName],
-    processes,
-  );
-  const hasSessionResult = await hasSession.promise;
-
-  if (hasSessionResult.exitCode !== 0) {
+const sessionStateForDir = async (dir: string, processes?: Subprocess[], isCancelled = () => false) => {
+  const session = await sessionForAsync(dir);
+  if (!session || isCancelled()) {
     return "";
   }
 
   const listClients = startTextCommand(
-    ["tmux", "list-clients", "-F", "#{session_name}"],
+    ["tmux", "list-clients", "-F", "#{session_id}"],
     processes,
   );
   const listClientsResult = await listClients.promise;
@@ -46,7 +41,7 @@ const sessionStateForDir = async (dir: string, processes?: Subprocess[]) => {
     listClientsResult.stdout
       .split("\n")
       .map((line) => line.trim())
-      .includes(sessionName)
+      .includes(session.id)
   ) {
     return "attached";
   }
@@ -57,6 +52,7 @@ const sessionStateForDir = async (dir: string, processes?: Subprocess[]) => {
 const buildPreviewData = async (
   dir: string,
   processes?: Subprocess[],
+  isCancelled = () => false,
 ): Promise<PreviewData> => {
   const statusCommand = startTextCommand(
     ["git", "-C", dir, "status", "--short", "--branch"],
@@ -67,7 +63,7 @@ const buildPreviewData = async (
     processes,
   );
   const [sessionState, statusResult, lastCommitResult] = await Promise.all([
-    sessionStateForDir(dir, processes),
+    sessionStateForDir(dir, processes, isCancelled),
     statusCommand.promise,
     lastCommitCommand.promise,
   ]);
@@ -86,7 +82,8 @@ const buildPreviewData = async (
     branch,
     base,
     track: divergence,
-    status: changes.length === 0 ? "clean" : `${changes.length} changes`,
+    status: statusResult.exitCode !== 0 ? "unknown (Git status failed)" : changes.length === 0 ? "clean" : `${changes.length} changes`,
+    ancestry: "", // Retain the display-cache shape; no unused ancestry query.
     tmux: sessionState,
     last: lastCommitResult.exitCode === 0 ? lastCommitResult.stdout.trim() : "",
     changes,
@@ -99,8 +96,13 @@ export const startPreviewLoad = (itemPath: string) => {
 
   return {
     promise: (async () => {
-      const preview = await buildPreviewData(itemPath, processes);
-      return cancelled ? null : preview;
+      try {
+        const preview = await buildPreviewData(itemPath, processes, () => cancelled);
+        return cancelled ? null : preview;
+      } catch {
+        return cancelled ? null : { path: itemPath, branch: "", base: "", track: "", status: "unavailable",
+          ancestry: "unknown", tmux: "unknown", last: "", changes: [] };
+      }
     })(),
     cancel: () => {
       cancelled = true;
