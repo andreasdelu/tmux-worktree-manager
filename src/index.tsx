@@ -10,11 +10,14 @@ import {
 } from "./ui";
 import { useTwmController } from "./useTwmController";
 import { useTwmInput } from "./useTwmInput";
+import { detachPopup, isPersistentPopup, refreshPopupOrigin } from "./lib/popup";
 
+refreshPopupOrigin();
 ensureConfigDefaults();
 
 const App = () => {
-  const { exit } = useApp();
+  const { exit: exitApp } = useApp();
+  const exit = () => isPersistentPopup() ? detachPopup() : exitApp();
 
   const terminalColumns = process.stdout.columns ?? 80;
   const terminalRows = process.stdout.rows ?? 24;

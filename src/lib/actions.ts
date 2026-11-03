@@ -8,6 +8,7 @@ import {
   sessionForAsync,
 } from "./session";
 import type { ActionMode, CreateSessionMode } from "../types";
+import { refreshPopupOrigin } from "./popup";
 
 const errorDetail = (value: string) =>
   stripAnsi(value)
@@ -102,6 +103,7 @@ export const suggestedCreateTargetDir = (dir: string, worktreeName: string) =>
 // Preserve launch-origin protection and also inspect the exact invoking client
 // after retained popup navigation. Never substitute tmux's most-recent client.
 const protectedSessions = async (): Promise<string[]> => {
+  refreshPopupOrigin();
   const origin = process.env.TWM_ORIGIN_SESSION || process.env.TMUX_PANE;
   const result = await runCommand(["tmux", "display-message", "-p", ...(origin ? ["-t", origin] : []), "#{session_id}"]);
   if (!result.success || !/^\$\d+$/.test(result.stdout.trim())) throw new Error(commandFailure("Couldn't identify current tmux session", result.stderr));

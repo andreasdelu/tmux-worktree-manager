@@ -2,6 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { layoutHookFile } from "../config";
 import { runCommand, runCommandSync } from "./commands";
+import { hostCommand, refreshPopupOrigin } from "./popup";
 import { associatedSessionName, parseSessionRecords, sessionListFormat, worktreeKey } from "./sessionAssociations";
 
 const safeSessionToken = (value: string, fallback: string) =>
@@ -92,7 +93,7 @@ export const sessionNameForAsync = async (dir: string): Promise<string> =>
 
 export const loadTmuxSessionNames = (): Set<string> => {
   const proc = Bun.spawnSync({
-    cmd: ["tmux", "list-sessions", "-F", "#{session_name}"],
+    cmd: hostCommand(["tmux", "list-sessions", "-F", "#{session_name}"]),
     stdout: "pipe",
     stderr: "pipe",
     env: process.env,
@@ -211,6 +212,8 @@ export const createSession = (sessionName: string, dir: string) => {
     stderr: "pipe",
     env: {
       ...process.env,
+      // User layout hooks use plain tmux commands, not our command adapter.
+      TMUX: process.env.TWM_HOST_TMUX ?? process.env.TMUX,
       TWM_SESSION_NAME: sessionName,
       TWM_SESSION_ID: sessionId,
       TWM_WORKTREE_PATH: dir,
@@ -236,6 +239,7 @@ export const ensureSessionFor = (dir: string): string =>
   sessionFor(dir, true)?.id ?? createSession(defaultSessionNameFor(dir), dir);
 
 export const enterSession = (sessionId: string) => {
+  refreshPopupOrigin();
   if (!/^\$\d+$/.test(sessionId)) throw new Error("Invalid tmux session identity");
   if (process.env.TWM_NO_ENTER === "1") {
     return;

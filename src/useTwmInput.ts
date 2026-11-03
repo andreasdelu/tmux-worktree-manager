@@ -15,6 +15,7 @@ import {
 } from "./lib/actions";
 import { useTwmStore } from "./store";
 import type { TwmController } from "./useTwmController";
+import { isPersistentPopup, refreshPopupOrigin } from "./lib/popup";
 import type { CreateField } from "./types";
 import { enterSession, sessionFor } from "./lib/session";
 
@@ -222,7 +223,7 @@ export const useTwmInput = ({ exit, controller }: UseTwmInputArgs) => {
             const session = sessionFor(createdTargetDir);
             if (!session) throw new Error("Created tmux session is no longer available");
             enterSession(session.id);
-            if (useTwmStore.getState().closeOnOpen) exit();
+            if (isPersistentPopup() || useTwmStore.getState().closeOnOpen) exit();
             else void controller.refreshLiveState();
           } catch (error) {
             message += `; could not open tmux session: ${error instanceof Error ? error.message : String(error)}`;
@@ -478,7 +479,7 @@ export const useTwmInput = ({ exit, controller }: UseTwmInputArgs) => {
         try {
           openItem(current.path);
           const pending = useTwmStore.getState().removingPaths.length;
-          if (useTwmStore.getState().closeOnOpen && !pending) exit();
+          if (isPersistentPopup() || useTwmStore.getState().closeOnOpen && !pending) exit();
           else {
             void controller.refreshLiveState();
             setState(state => ({ ...state, message: `Opened ${current.name}.${pending ? " Keeping twm open until queued removals finish." : ""}` }));
@@ -592,9 +593,14 @@ export const useTwmInput = ({ exit, controller }: UseTwmInputArgs) => {
   };
 
   useInput((input, key) => {
+    try { refreshPopupOrigin(); }
+    catch (error) {
+      setState(state => ({ ...state, message: error instanceof Error ? error.message : String(error) }));
+      return;
+    }
     inputGeneration.current++;
     if (key.ctrl && input === "c") {
-      if (useTwmStore.getState().removingPaths.length) setState(state => ({ ...state, message: "Removals pending; wait before closing." }));
+      if (!isPersistentPopup() && useTwmStore.getState().removingPaths.length) setState(state => ({ ...state, message: "Removals pending; wait before closing." }));
       else exit();
       return;
     }
@@ -605,7 +611,7 @@ export const useTwmInput = ({ exit, controller }: UseTwmInputArgs) => {
     if (dialog.kind === "running") return;
     const pending = useTwmStore.getState().removingPaths;
     if (pending.length && dialog.kind === "none") {
-      if (key.escape || input === "q") {
+      if ((key.escape || input === "q") && !isPersistentPopup()) {
         setState(state => ({ ...state, message: "Removals pending; wait before closing." }));
         return;
       }

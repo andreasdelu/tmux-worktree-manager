@@ -15,7 +15,7 @@ twm_popup_width="$(tmux show-option -gqv @twm-popup-width)"
 twm_popup_height="$(tmux show-option -gqv @twm-popup-height)"
 
 if [ -n "$twm_key" ]; then
-  printf -v run_script '%q' "$current_dir/scripts/run.sh"
+  printf -v run_script '%q' "$current_dir/scripts/popup.sh"
   printf -v popup_width '%q' "$twm_popup_width"
   printf -v popup_height '%q' "$twm_popup_height"
   # run-shell expands formats in the invoking client's context; display-popup

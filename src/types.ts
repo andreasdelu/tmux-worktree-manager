@@ -26,6 +26,7 @@ export type Item = {
   name: string;
   isPrimary: boolean;
   hasSession: boolean;
+  isCurrentSession?: boolean;
   repoRoot: string;
   createRoot: string;
   branch: string;

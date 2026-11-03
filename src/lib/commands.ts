@@ -1,10 +1,11 @@
 import type { Subprocess } from "bun";
+import { hostCommand } from "./popup";
 
 const ansiRegex = /\x1B\[[0-?]*[ -/]*[@-~]/g;
 
 export const runCommandSync = (cmd: string[]) => {
   const proc = Bun.spawnSync({
-    cmd,
+    cmd: hostCommand(cmd),
     stdout: "pipe",
     stderr: "pipe",
     env: process.env,
@@ -22,7 +23,7 @@ export const stripAnsi = (text: string) => text.replace(ansiRegex, "");
 
 export const startTextCommand = (cmd: string[], processes?: Subprocess[]) => {
   const proc = Bun.spawn({
-    cmd,
+    cmd: hostCommand(cmd),
     stdout: "pipe",
     stderr: "pipe",
     env: process.env,
