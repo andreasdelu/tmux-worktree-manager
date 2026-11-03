@@ -1,52 +1,24 @@
 export type ItemKind = "worktree" | "source-empty";
-
-export type OverwatchStatus =
-  | "idle"
-  | "working"
-  | "done"
-  | "error"
-  | "offline"
-  | "stale";
-
-export type OverwatchAgentState = {
-  agentId: string;
-  cwd: string;
-  sessionName?: string;
-  status: OverwatchStatus;
-  phase: string;
-  toolName?: string;
-  summary?: string;
-  startedAt?: string;
-  finishedAt?: string;
-  updatedAt?: string;
-  lastHeartbeatAt?: string;
-  heartbeatAgeMs: number;
-  runtimeMs?: number;
-  queue: {
-    steering: number;
-    followUp: number;
-  };
-  tmux?: {
-    sessionName?: string;
-    windowIndex?: string;
-    paneIndex?: string;
-    paneId?: string;
-  };
-  identity: string;
+export type AgentReport = {
+  pid: number;
+  heartbeat: number;
+  state: "working" | "thinking" | "responding" | "tool" | "needs-input" | "idle" | "done" | "error" | "stopped";
+  toolCount: number;
+  tools?: string[];
+  startedAt?: number;
+  finishedAt?: number;
 };
-
-export type OverwatchMatch =
-  | {
-      kind: "single";
-      matchedBy: "cwd" | "tmux";
-      agent: OverwatchAgentState;
-    }
-  | {
-      kind: "multi";
-      matchedBy: "cwd" | "tmux";
-      agents: OverwatchAgentState[];
-    };
-
+export type AgentPane = {
+  sessionId: string;
+  paneId: string;
+  windowIndex: string;
+  paneIndex: string;
+  dead: boolean;
+  report?: AgentReport;
+  messages?: { human: string; agent: string; heartbeat: number };
+  children?: { state: "unknown" | "active" | "inactive"; heartbeat: number };
+  cwd: string;
+};
 export type Item = {
   kind: ItemKind;
   group: string;
@@ -54,25 +26,28 @@ export type Item = {
   name: string;
   isPrimary: boolean;
   hasSession: boolean;
-  overwatch?: OverwatchMatch;
+  repoRoot: string;
+  createRoot: string;
+  branch: string;
+  sessionName: string;
+  available: boolean;
+  locked: boolean;
+  agentPanes?: AgentPane[];
+  agentUnavailable?: boolean;
 };
-
 export type ActionMode = "kill" | "remove";
 export type ViewMode = "worktrees" | "sources";
-
+export type CreateSessionMode = "none" | "create" | "open";
+export type CreateField = "worktreeName" | "branchName" | "baseRef" | "createSession" | "openSession";
 export type DialogState =
   | { kind: "none" }
-  | { kind: "add-source"; value: string }
-  | {
-      kind: "create";
-      worktreeName: string;
-      branchName: string;
-      field: "worktreeName" | "branchName";
-    }
-  | { kind: "confirm"; mode: ActionMode }
+  | { kind: "add-source"; value: string; cursor?: number }
+  | { kind: "assign"; targetPath: string; sessions: { id: string; name: string }[]; selected: number }
+  | { kind: "create"; sourcePath: string; worktreeName: string; branchName: string; baseRef: string;
+      field: CreateField; sessionMode: CreateSessionMode; cursor?: number }
+  | { kind: "confirm"; mode: ActionMode; targetPath: string; targetName: string }
   | { kind: "notice"; title: string; message: string }
   | { kind: "running"; label: string };
-
 export type SourceEntry = {
   raw: string;
   path: string;
@@ -80,19 +55,20 @@ export type SourceEntry = {
   exists: boolean;
   valid: boolean;
   issue: string;
+  commonDir?: string;
+  isPrimary?: boolean;
 };
-
 export type PreviewData = {
   path: string;
   branch: string;
   base: string;
   track: string;
   status: string;
+  ancestry: string;
   tmux: string;
   last: string;
   changes: string[];
 };
-
 export type AppState = {
   items: Item[];
   selected: number;

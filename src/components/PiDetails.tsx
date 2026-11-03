@@ -1,202 +1,69 @@
-import React from "react";
+import React, { useEffect, useState } from "react";
 import { Box, Text } from "ink";
-import { sortOverwatchAgents } from "../lib/overwatch";
-import { theme } from "../theme";
-import type { Item, OverwatchAgentState } from "../types";
+import { agentIsBusy, freshAgentState, freshChildState } from "../lib/agents";
 import { Spinner } from "./Spinner";
+import { theme } from "../theme";
+import type { AgentPane, Item } from "../types";
+import { AgentStatus } from "./AgentStatus";
 
-const statusLabel = (status: string) => {
-  switch (status) {
-    case "done":
-      return "✓";
-    case "stale":
-      return "!";
-    case "error":
-      return "×";
-    case "idle":
-    case "offline":
-      return "○";
-    default:
-      return "·";
-  }
+const PaneDetails = ({ pane, rows }: { pane: AgentPane; rows: number }) => {
+  const [, redraw] = useState(0);
+  const now = Date.now();
+  const expiry = Math.min(...[pane.messages?.heartbeat, pane.report?.heartbeat, pane.children?.heartbeat]
+    .filter((heartbeat): heartbeat is number => heartbeat !== undefined && heartbeat + 15000 > now)
+    .map(heartbeat => heartbeat + 15000));
+  useEffect(() => {
+    if (!Number.isFinite(expiry)) return;
+    const timer = setTimeout(() => redraw(value => value + 1), Math.max(1, expiry - Date.now()));
+    return () => clearTimeout(timer);
+  }, [expiry]);
+  const messages = freshAgentState(pane) && pane.messages && pane.messages.heartbeat <= Date.now()
+    && Date.now() - pane.messages.heartbeat < 15000 ? pane.messages : undefined;
+  const state = freshAgentState(pane);
+  const live = Boolean(state);
+  const children = freshChildState(pane);
+  const childrenUnknown = Boolean(pane.children) && children !== "active" && children !== "inactive";
+  const showActivity = agentIsBusy(pane) || !live || pane.dead || childrenUnknown || ["needs-input", "error", "stopped"].includes(state ?? "");
+  const legacy = live && pane.report?.tools === undefined;
+  const human = messages?.human || (legacy ? "Not reported: update reporter and /reload"
+    : !live ? "Unavailable without a live reporter" : "No prompt observed yet");
+  const agent = messages?.agent || (legacy ? "Not reported by this reporter"
+    : !live ? "Unavailable without a live reporter" : "No reply observed yet");
+  // At minimum height, status takes priority over stale or clipped messages.
+  if (rows < 2) return <AgentStatus panes={[pane]} />;
+  return <Box flexDirection="column" flexShrink={0}>
+    {rows >= 3 ? <Text color={theme.colors.muted} wrap="truncate-end">π {pane.windowIndex}.{pane.paneIndex}</Text> : null}
+    <Box flexShrink={0}><Box width={7} flexShrink={0}><Text color={theme.colors.muted}>You</Text></Box>
+      <Text color={messages?.human ? undefined : theme.colors.muted} wrap="truncate-end">{human}</Text></Box>
+    <Box flexShrink={0}><Box width={7} flexShrink={0}><Text color={theme.colors.muted}>Agent</Text></Box>
+      {showActivity ? <Box><AgentStatus panes={[pane]} inline parentOnly={Boolean(pane.children)} />
+        {childrenUnknown ? <Text color={theme.colors.muted} wrap="truncate-end"> · Subagent status unknown</Text> : null}</Box>
+        : <Text color={messages?.agent ? undefined : theme.colors.muted} wrap="truncate-end">{agent}</Text>}</Box>
+    {children === "active" ? <Box paddingLeft={7} flexShrink={0}>
+      <Spinner /><Text color="cyan" wrap="truncate-end"> Subagents working</Text>
+    </Box> : null}
+  </Box>;
 };
 
-const statusColor = (status: string) => {
-  switch (status) {
-    case "working":
-      return theme.colors.accent;
-    case "done":
-      return theme.colors.success;
-    case "stale":
-      return theme.colors.warning;
-    case "error":
-      return theme.colors.danger;
-    default:
-      return theme.colors.muted;
+export const PiDetails = ({ current, rows = Infinity }: { current: Item; rows?: number }) => {
+  const panes = current.agentPanes ?? [];
+  const availableRows = rows - Number(Boolean(current.agentUnavailable));
+  const neededRows = panes.reduce((sum, pane) => sum + 3 + Number(freshChildState(pane) === "active"), 0) + Math.max(0, panes.length - 1);
+  const overflow = panes.length > 1 && neededRows > availableRows;
+  let visibleCount = panes.length;
+  if (overflow) {
+    visibleCount = 0;
+    let used = 0;
+    for (const pane of panes) {
+      const groupRows = 3 + Number(freshChildState(pane) === "active") + Number(visibleCount > 0);
+      if (used + groupRows + 1 > availableRows) break; // reserve overflow notice
+      used += groupRows;
+      visibleCount++;
+    }
   }
-};
-
-const currentWorkLabel = (
-  status: string,
-  summary?: string,
-  phase?: string,
-  toolName?: string,
-) => {
-  if (status === "offline") {
-    return "offline";
-  }
-
-  if (status === "done") {
-    return "—";
-  }
-
-  if (toolName) {
-    return toolName;
-  }
-
-  if (phase === "thinking") {
-    return "thinking";
-  }
-
-  if (phase === "queueing") {
-    return "queued";
-  }
-
-  if (phase === "waiting") {
-    return "waiting";
-  }
-
-  if (summary && summary !== "Working") {
-    return summary;
-  }
-
-  return "—";
-};
-
-const summaryLabel = (summary?: string, workLabel?: string) => {
-  if (!summary || summary === "Working" || summary === workLabel) {
-    return "—";
-  }
-
-  return summary;
-};
-
-const rowColor = (status: string) =>
-  status === "offline" ? theme.colors.muted : undefined;
-
-const STATE_WIDTH = 1;
-const TARGET_WIDTH = 14;
-const WHERE_WIDTH = 9;
-const DOING_WIDTH = 10;
-
-const fit = (value: string, width: number) => {
-  if (width <= 0) {
-    return "";
-  }
-
-  if (value.length <= width) {
-    return value.padEnd(width, " ");
-  }
-
-  return `${value.slice(0, Math.max(0, width - 1))}…`;
-};
-
-const whereLabel = (instance: OverwatchAgentState) => {
-  if (instance.tmux?.windowIndex && instance.tmux?.paneIndex) {
-    return `tmux ${instance.tmux.windowIndex}.${instance.tmux.paneIndex}`;
-  }
-
-  if (instance.tmux?.sessionName) {
-    return `tmux ${instance.tmux.sessionName}`;
-  }
-
-  return "cwd";
-};
-
-const tableLine = (
-  state: string,
-  target: string,
-  where: string,
-  doing: string,
-  summary: string,
-) => `${fit(state, STATE_WIDTH)} ${detailsLine(target, where, doing, summary)}`;
-
-const detailsLine = (
-  target: string,
-  where: string,
-  doing: string,
-  summary: string,
-) => `${fit(target, TARGET_WIDTH)} ${fit(where, WHERE_WIDTH)} ${fit(doing, DOING_WIDTH)} ${summary}`;
-
-const doingLabel = (status: string, phase?: string, toolName?: string) => {
-  if (status === "offline") {
-    return "offline";
-  }
-
-  if (toolName) {
-    return toolName;
-  }
-
-  return phase || "—";
-};
-
-export const PiDetails = ({ current }: { current: Item }) => {
-  if (current.kind !== "worktree") {
-    return <Text color={theme.colors.muted}>No Pi activity for this worktree.</Text>;
-  }
-
-  if (!current.overwatch) {
-    return <Text color={theme.colors.muted}>No Pi activity for this worktree.</Text>;
-  }
-
-  const instances = current.overwatch.kind === "single"
-    ? [current.overwatch.agent]
-    : sortOverwatchAgents(current.overwatch.agents);
-
-  return (
-    <Box flexDirection="column" overflow="hidden">
-      <Box height={1} overflow="hidden">
-        <Text color={theme.colors.muted} wrap="truncate-end">
-          {tableLine("S", "TARGET", "WHERE", "DOING", "SUMMARY")}
-        </Text>
-      </Box>
-      <Box height={1} overflow="hidden">
-        <Text color={theme.colors.muted} wrap="truncate-end">{"─".repeat(200)}</Text>
-      </Box>
-      {instances.map((instance) => {
-        const workLabel = currentWorkLabel(
-          instance.status,
-          instance.summary,
-          instance.phase,
-          instance.toolName,
-        );
-        const summary = summaryLabel(instance.summary, workLabel);
-
-        return (
-          <Box key={`${current.path}:pi:${instance.agentId}`} height={1} overflow="hidden">
-            <Box width={STATE_WIDTH + 1} overflow="hidden">
-              {instance.status === "working" ? (
-                <Spinner color="cyan" />
-              ) : (
-                <Text color={statusColor(instance.status)}>
-                  {fit(statusLabel(instance.status), STATE_WIDTH)}
-                </Text>
-              )}
-              <Text> </Text>
-            </Box>
-            <Box flexShrink={1} minWidth={0} overflow="hidden">
-              <Text color={rowColor(instance.status)} wrap="truncate-end">
-                {detailsLine(
-                  instance.identity,
-                  whereLabel(instance),
-                  doingLabel(instance.status, instance.phase, instance.toolName),
-                  summary,
-                )}
-              </Text>
-            </Box>
-          </Box>
-        );
-      })}
-    </Box>
-  );
+  return <Box flexDirection="column" flexShrink={0}>
+    {current.agentUnavailable ? <Text color={theme.colors.muted}>tmux status unavailable.</Text> : null}
+    {panes.slice(0, visibleCount).map((pane, index) => <Box key={pane.paneId} flexDirection="column" flexShrink={0} marginTop={index ? 1 : 0}><PaneDetails pane={pane} rows={availableRows} /></Box>)}
+    {overflow ? <Text color={theme.colors.muted} wrap="truncate-end">{panes.length - visibleCount} more agents · enlarge terminal</Text> : null}
+  </Box>;
 };

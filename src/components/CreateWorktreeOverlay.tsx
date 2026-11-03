@@ -1,6 +1,6 @@
 import React from "react";
 import { theme } from "../theme";
-import type { Item } from "../types";
+import type { Item, CreateField, CreateSessionMode } from "../types";
 import { CreateWorktreeDialog } from "./CreateWorktreeDialog";
 import { DialogFrame } from "./DialogFrame";
 
@@ -10,8 +10,11 @@ type CreateWorktreeOverlayProps = {
   current?: Item;
   worktreeName: string;
   branchName: string;
-  activeField: "worktreeName" | "branchName";
+  baseRef: string;
+  activeField: CreateField;
+  sessionMode?: CreateSessionMode;
   createTargetPath: string;
+  cursor?: number;
 };
 
 export const CreateWorktreeOverlay = ({
@@ -20,28 +23,28 @@ export const CreateWorktreeOverlay = ({
   current,
   worktreeName,
   branchName,
+  baseRef,
   activeField,
+  cursor,
   createTargetPath,
+  sessionMode,
 }: CreateWorktreeOverlayProps) => {
-  const subtitle = current
-    ? current.kind === "source-empty"
-      ? `Create the first linked worktree from ${current.group}.`
-      : `Create a new worktree from ${current.group}.`
-    : "Create a new worktree.";
-
   return (
     <DialogFrame
       rootHeight={rootHeight}
       isSplit={isSplit}
       borderColor={theme.colors.border}
       title="Create worktree"
-      subtitle={subtitle}
-      footer="tab switch field • enter create • esc cancel"
+      footer="tab field • space toggle • enter create • esc cancel"
     >
       <CreateWorktreeDialog
         worktreeName={worktreeName}
         branchName={branchName}
+        baseRef={baseRef}
+        defaultBase={current?.branch || "selected HEAD"}
         activeField={activeField}
+        sessionMode={sessionMode}
+        cursor={cursor}
         createTargetPath={createTargetPath}
       />
     </DialogFrame>

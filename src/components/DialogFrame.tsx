@@ -46,7 +46,7 @@ export const DialogFrame = ({
       flexDirection="column"
     >
       {typeof title === "string" ? (
-        <Text bold color={titleColor}>{title}</Text>
+        <Text bold color={titleColor} wrap="truncate-end">{title}</Text>
       ) : (
         title
       )}
